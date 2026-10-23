@@ -42,6 +42,32 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail("Validation error", errorDetails));
     }
 
+    @ExceptionHandler(InvalidStateTransitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStateTransition(
+            InvalidStateTransitionException ex, HttpServletRequest request) {
+        ErrorDetails errorDetails = new ErrorDetails(
+                "INVALID_STATE_TRANSITION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        log.warn("Invalid state transition on path {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(ex.getMessage(), errorDetails));
+    }
+
+    @ExceptionHandler(DuplicateResourceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateResource(
+            DuplicateResourceException ex, HttpServletRequest request) {
+        ErrorDetails errorDetails = new ErrorDetails(
+                "DUPLICATE_RESOURCE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        log.warn("Duplicate resource conflict on path {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail(ex.getMessage(), errorDetails));
+    }
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleResourceNotFoundException(
             ResourceNotFoundException ex, HttpServletRequest request) {
