@@ -1,13 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import PageHeader from '../components/common/PageHeader';
+import StatCard from '../components/common/StatCard';
 import Card from '../components/common/Card';
-import Badge from '../components/common/Badge';
 import Button from '../components/common/Button';
-import LoadingSpinner from '../components/feedback/LoadingSpinner';
-import ErrorMessage from '../components/feedback/ErrorMessage';
+import StatusBadge from '../components/common/StatusBadge';
+import DataTable from '../components/common/DataTable';
 import { healthService } from '../services/healthService';
-import { ShieldCheck, FileCheck, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { ROUTES } from '../constants/routes';
+import {
+  MOCK_DASHBOARD_METRICS,
+  MOCK_REVIEWS,
+} from '../mock/mockData';
+import {
+  FileText,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  ArrowRight,
+  Activity,
+  PlusCircle,
+} from 'lucide-react';
 
 export default function DashboardPage() {
+  const { activeBrand } = useAuth();
   const [health, setHealth] = useState(null);
   const [isLoadingHealth, setIsLoadingHealth] = useState(true);
   const [healthError, setHealthError] = useState(null);
@@ -29,122 +46,225 @@ export default function DashboardPage() {
     fetchHealth();
   }, []);
 
-  return (
-    <div className="space-y-8">
-      {/* Page Title & Welcome Banner */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+  const reviewColumns = [
+    {
+      key: 'title',
+      header: 'Review Submission',
+      render: (val, row) => (
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-ink-900">Brand Governance Dashboard</h1>
-          <p className="text-sm text-ink-500 mt-1">
-            Monitoring active brand compliance, approved claims ledger, and human-in-the-loop review queues.
-          </p>
-        </div>
-        <div className="flex items-center space-x-3">
-          <Badge variant="brand" size="md">Phase 1 Foundation</Badge>
-          <Button size="sm" variant="outline" onClick={fetchHealth}>
-            Refresh Health
-          </Button>
-        </div>
-      </div>
-
-      {/* Backend Health & Connectivity Card */}
-      <Card
-        title="Backend Connectivity Status"
-        subtitle="Verifies real REST API communication with Spring Boot (/api/v1/health)"
-      >
-        {isLoadingHealth ? (
-          <LoadingSpinner size="sm" message="Querying Spring Boot /api/v1/health endpoint..." />
-        ) : healthError ? (
-          <ErrorMessage
-            title="Backend Offline or Unreachable"
-            message={`${healthError}. Verify the Spring Boot backend is running on port 8080.`}
-            onRetry={fetchHealth}
-          />
-        ) : (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg bg-emerald-50/60 border border-emerald-200">
-            <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-full bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-700">
-                <Activity className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-emerald-900">
-                  {health?.data?.status || 'HEALTHY'} — {health?.data?.application || 'Inkloom AI Backend'}
-                </div>
-                <div className="text-xs text-emerald-700">
-                  Timestamp: {health?.data?.timestamp || new Date().toISOString()} • Environment: {health?.data?.environment || 'dev'}
-                </div>
-              </div>
-            </div>
-            <Badge variant="success" size="md">REST API Connected</Badge>
+          <Link
+            to={`/reviews/${row.id}/findings`}
+            className="font-semibold text-ink-900 hover:text-brand-600 transition-colors"
+          >
+            {val}
+          </Link>
+          <div className="text-[11px] text-ink-500 mt-0.5">
+            {row.contentType} • Submitted by {row.author}
           </div>
-        )}
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (val) => <StatusBadge status={val} />,
+    },
+    {
+      key: 'complianceScore',
+      header: 'Compliance',
+      render: (val) => (
+        <span
+          className={`font-semibold ${
+            val >= 90 ? 'text-emerald-600' : val >= 75 ? 'text-amber-600' : 'text-rose-600'
+          }`}
+        >
+          {val}%
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Action',
+      className: 'text-right',
+      render: (_, row) => (
+        <Link to={`/reviews/${row.id}/findings`}>
+          <Button size="sm" variant="outline" className="text-xs">
+            Inspect Findings
+          </Button>
+        </Link>
+      ),
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Page Header */}
+      <PageHeader
+        title={`${activeBrand?.name || 'Workspace'} Governance`}
+        description="Comprehensive dashboard overviewing submitted communications, active claims compliance, and human approval queues."
+        badge={activeBrand?.activeGuidelinesVersion || 'v3.2'}
+        actions={
+          <div className="flex items-center space-x-2">
+            <Link to={ROUTES.REVIEW_EDITOR}>
+              <Button size="sm" variant="primary" className="font-semibold text-xs">
+                <PlusCircle className="w-4 h-4 mr-1.5" />
+                Submit Content for Review
+              </Button>
+            </Link>
+          </div>
+        }
+      />
+
+      {/* Backend API Live Status Banner */}
+      <Card className="border-ink-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 flex-shrink-0">
+              <Activity className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="font-semibold text-ink-900">
+                Spring Boot REST Backend Status:{' '}
+                {isLoadingHealth ? (
+                  <span className="text-ink-400">Pinging /api/v1/health...</span>
+                ) : healthError ? (
+                  <span className="text-rose-600">Offline ({healthError})</span>
+                ) : (
+                  <span className="text-emerald-600 font-bold">{health?.data?.status || 'UP'} (Port 8080)</span>
+                )}
+              </div>
+              <p className="text-ink-500 text-[11px] mt-0.5">
+                Database: {health?.data?.database || 'Pending connection'} • Environment: {health?.data?.environment || 'dev'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] text-ink-400 italic">
+              (Development mock analytics active below)
+            </span>
+            <Button size="sm" variant="ghost" onClick={fetchHealth} className="text-xs py-1">
+              Refresh Status
+            </Button>
+          </div>
+        </div>
       </Card>
 
-      {/* Overview Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="hover:border-ink-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">Guidelines Version</span>
-            <span className="p-2 rounded-lg bg-brand-50 text-brand-600 border border-brand-200">
-              <ShieldCheck className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-ink-900">v2.4</div>
-            <p className="text-xs text-ink-500 mt-0.5">38 active rules & tone constraints</p>
-          </div>
-        </Card>
+      {/* 4 Core Governance Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          label="Total Reviews"
+          value={MOCK_DASHBOARD_METRICS.totalReviews}
+          change="+12 this week"
+          isPositive={true}
+          helper="across all campaigns"
+          icon={FileText}
+          iconColor="text-brand-600 bg-brand-50 border-brand-200"
+        />
 
-        <Card className="hover:border-ink-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">Approved Claims</span>
-            <span className="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200">
-              <CheckCircle2 className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-ink-900">124</div>
-            <p className="text-xs text-emerald-600 mt-0.5">100% verified with citations</p>
-          </div>
-        </Card>
+        <StatCard
+          label="Pending Reviews"
+          value={MOCK_DASHBOARD_METRICS.pendingReviews}
+          change="-3 from yesterday"
+          isPositive={true}
+          helper="currently in pipeline"
+          icon={Clock}
+          iconColor="text-amber-600 bg-amber-50 border-amber-200"
+        />
 
-        <Card className="hover:border-ink-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">Pending Approvals</span>
-            <span className="p-2 rounded-lg bg-amber-50 text-amber-600 border border-amber-200">
-              <FileCheck className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-ink-900">7</div>
-            <p className="text-xs text-amber-700 mt-0.5">Awaiting human reviewer sign-off</p>
-          </div>
-        </Card>
+        <StatCard
+          label="Issues Identified"
+          value={MOCK_DASHBOARD_METRICS.issuesIdentified}
+          change="-8.4%"
+          isPositive={true}
+          helper="violations flagged"
+          icon={AlertTriangle}
+          iconColor="text-rose-600 bg-rose-50 border-rose-200"
+        />
 
-        <Card className="hover:border-ink-300 transition-colors">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wider text-ink-500">Compliance Rate</span>
-            <span className="p-2 rounded-lg bg-ink-100 text-ink-600 border border-ink-200">
-              <AlertTriangle className="w-4 h-4" />
-            </span>
-          </div>
-          <div className="mt-3">
-            <div className="text-2xl font-bold text-ink-900">94.8%</div>
-            <p className="text-xs text-ink-500 mt-0.5">+3.2% from last cycle</p>
-          </div>
-        </Card>
+        <StatCard
+          label="Pending Approvals"
+          value={MOCK_DASHBOARD_METRICS.pendingApprovals}
+          change="Requires human action"
+          isPositive={false}
+          helper="in reviewer queue"
+          icon={CheckCircle2}
+          iconColor="text-emerald-600 bg-emerald-50 border-emerald-200"
+        />
       </div>
 
-      {/* Foundation Architecture Notice */}
-      <div className="p-6 rounded-xl bg-ink-900 text-white shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-        <div>
-          <Badge variant="brand" size="sm" className="bg-brand-500/20 text-brand-300 border-brand-500/40 mb-2">
-            Architecture Milestone
-          </Badge>
-          <h2 className="text-lg font-bold text-white">Phase 1 Foundation Operational</h2>
-          <p className="text-xs text-ink-300 mt-1 max-w-2xl leading-relaxed">
-            The foundation layer establishes the React + Vite single page frontend with strict JavaScript/JSX, centralized API client, reusable design components, and Java 21+ Spring Boot MVC backend ready for MongoDB persistence in Phase 2.
-          </p>
+      {/* Two-column layout: Recent Reviews & Issue Trends */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Recent Reviews Table (2 cols) */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-ink-900 tracking-tight">Recent Content Submissions</h2>
+            <Link to={ROUTES.APPROVALS} className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center">
+              View Approval Queue <ArrowRight className="w-3.5 h-3.5 ml-1" />
+            </Link>
+          </div>
+
+          <DataTable
+            columns={reviewColumns}
+            data={MOCK_REVIEWS}
+            keyField="id"
+          />
+        </div>
+
+        {/* Right: Issue Category Trends & Activity Feed */}
+        <div className="space-y-6">
+          {/* Issue Category Breakdown */}
+          <Card
+            title="Issue-Category Trends"
+            subtitle="Most frequent violations detected across submissions"
+          >
+            <div className="space-y-3 mt-1">
+              {MOCK_DASHBOARD_METRICS.categoryTrends.map((cat, idx) => (
+                <div key={idx} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-medium text-ink-800">{cat.category}</span>
+                    <span className="font-bold text-ink-900">{cat.count} ({cat.percentage}%)</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-ink-100 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        cat.severity === 'CRITICAL' ? 'bg-rose-500' :
+                        cat.severity === 'WARNING' ? 'bg-amber-500' : 'bg-brand-500'
+                      }`}
+                      style={{ width: `${cat.percentage}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-ink-100 text-center">
+              <Link to={ROUTES.HEATMAP} className="text-xs font-semibold text-brand-600 hover:text-brand-700 inline-flex items-center">
+                Explore Clarity Heatmap <ArrowRight className="w-3 h-3 ml-1" />
+              </Link>
+            </div>
+          </Card>
+
+          {/* Activity Feed */}
+          <Card
+            title="Recent Activity"
+            subtitle="Governance actions & revisions logged in real time"
+          >
+            <div className="space-y-3.5">
+              {MOCK_DASHBOARD_METRICS.recentActivity.map((act) => (
+                <div key={act.id} className="flex items-start space-x-2.5 text-xs">
+                  <span className="w-2 h-2 rounded-full bg-brand-500 mt-1.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="text-ink-800">
+                      <strong className="text-ink-900">{act.user}</strong> ({act.role}) {act.action.toLowerCase()}:{' '}
+                      <span className="italic text-ink-700">&ldquo;{act.target}&rdquo;</span>
+                    </div>
+                    <span className="text-[10px] text-ink-400 mt-0.5 block">{act.timestamp}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
         </div>
       </div>
     </div>
