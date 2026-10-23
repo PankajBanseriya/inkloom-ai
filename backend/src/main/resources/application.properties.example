@@ -1,0 +1,26 @@
+# Inkloom Backend Environment Configuration Template
+# Copy or set these environment variables in your deployment environment
+
+# Server Port (default: 8080)
+PORT=8080
+
+# MongoDB URI (Local or MongoDB Atlas connection string)
+# Example Local: mongodb://localhost:27017/inkloom
+# Example Atlas: mongodb+srv://<username>:<password>@cluster0.mongodb.net/inkloom?retryWrites=true&w=majority
+MONGODB_URI=mongodb://localhost:27017/inkloom
+
+# JWT Signing Secret (minimum 256 bits for HMAC-SHA256)
+INKLOOM_JWT_SECRET=your_super_secret_jwt_key_at_least_32_characters_long_for_security
+
+# JWT Expiration in Milliseconds (86400000 = 24 hours)
+INKLOOM_JWT_EXPIRATION_MS=86400000
+
+# AI Provider ("gemini", "openai", or "none")
+INKLOOM_AI_PROVIDER=none
+
+# AI Provider API Key (e.g., Google AI Studio Gemini API Key)
+# Leave blank to run in deterministic rule-engine fallback mode
+INKLOOM_AI_API_KEY=
+
+# Allowed CORS Origins for React Frontend
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173

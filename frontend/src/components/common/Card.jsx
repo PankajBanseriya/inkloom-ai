@@ -1,0 +1,19 @@
+import React from 'react';
+
+export default function Card({ children, className = '', title, subtitle, action, footer }) {
+  return (
+    <div className={`bg-white rounded-xl border border-ink-200/80 shadow-sm overflow-hidden ${className}`}>
+      {(title || action) && (
+        <div className="px-6 py-4 border-b border-ink-100 flex items-center justify-between">
+          <div>
+            {title && <h3 className="text-base font-semibold text-ink-900">{title}</h3>}
+            {subtitle && <p className="text-xs text-ink-500 mt-0.5">{subtitle}</p>}
+          </div>
+          {action && <div>{action}</div>}
+        </div>
+      )}
+      <div className="p-6">{children}</div>
+      {footer && <div className="px-6 py-3 bg-ink-50/50 border-t border-ink-100">{footer}</div>}
+    </div>
+  );
+}
