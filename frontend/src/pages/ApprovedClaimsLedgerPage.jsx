@@ -9,9 +9,10 @@ import Modal from '../components/common/Modal';
 import Input from '../components/common/Input';
 import FormField from '../components/common/FormField';
 import LoadingSpinner from '../components/feedback/LoadingSpinner';
+import EmptyState from '../components/feedback/EmptyState';
+import Card from '../components/common/Card';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { MOCK_APPROVED_CLAIMS } from '../mock/mockData';
 import claimsService from '../services/claimsService';
 import { Plus, CheckCircle2, AlertTriangle, Trash2, Clock, RefreshCw } from 'lucide-react';
 
@@ -20,8 +21,8 @@ export default function ApprovedClaimsLedgerPage() {
   const { success, error: toastError, info } = useToast();
   const canManageClaims = user?.role === 'BRAND_MANAGER' || user?.role === 'ADMIN';
 
-  const [claims, setClaims] = useState(MOCK_APPROVED_CLAIMS);
-  const [loading, setLoading] = useState(false);
+  const [claims, setClaims] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,16 +34,18 @@ export default function ApprovedClaimsLedgerPage() {
   const [newExpiry, setNewExpiry] = useState('');
 
   const fetchClaims = useCallback(() => {
-    if (!activeBrand?.id) return;
+    if (!activeBrand?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     claimsService.getClaims(activeBrand.id)
       .then((data) => {
-        if (data && data.length > 0) {
-          setClaims(data);
-        }
+        setClaims(data || []);
       })
       .catch((err) => {
-        console.warn('Could not load claims from API, using cached data:', err.message);
+        console.warn('Could not load claims from API:', err.message);
+        setClaims([]);
       })
       .finally(() => setLoading(false));
   }, [activeBrand?.id]);
@@ -75,24 +78,19 @@ export default function ApprovedClaimsLedgerPage() {
       expiryDate: newExpiry ? new Date(newExpiry).toISOString() : new Date(Date.now() + 365 * 86400000).toISOString(),
     };
 
-    if (activeBrand?.id) {
-      try {
-        const saved = await claimsService.createClaim(activeBrand.id, payload);
-        if (saved) {
-          setClaims((prev) => [saved, ...prev]);
-        }
-      } catch (err) {
-        toastError('Failed to register claim', err.message);
-        return;
+    if (!activeBrand?.id) {
+      toastError('No workspace selected', 'Please select a brand workspace before registering a claim.');
+      return;
+    }
+
+    try {
+      const saved = await claimsService.createClaim(activeBrand.id, payload);
+      if (saved) {
+        setClaims((prev) => [saved, ...prev]);
       }
-    } else {
-      const claimObj = {
-        id: `clm-${Date.now().toString(36)}`,
-        ...payload,
-        status: 'APPROVED',
-        reviewDate: new Date().toISOString(),
-      };
-      setClaims((prev) => [claimObj, ...prev]);
+    } catch (err) {
+      toastError('Failed to register claim', err.message);
+      return;
     }
 
     setIsModalOpen(false);
@@ -110,16 +108,14 @@ export default function ApprovedClaimsLedgerPage() {
       return;
     }
 
-    if (activeBrand?.id) {
-      try {
-        await claimsService.deleteClaim(activeBrand.id, claimId);
-      } catch (err) {
-        toastError('Deletion Failed', err.message);
-        return;
-      }
+    if (!activeBrand?.id) return;
+    try {
+      await claimsService.deleteClaim(activeBrand.id, claimId);
+      setClaims((prev) => prev.filter((c) => c.id !== claimId));
+      info('Claim Removed', 'Approved claim record deleted from ledger.');
+    } catch (err) {
+      toastError('Deletion Failed', err.message);
     }
-    setClaims((prev) => prev.filter((c) => c.id !== claimId));
-    info('Claim Removed', 'Approved claim record deleted from ledger.');
   };
 
   const handleToggleStatus = async (claim) => {
@@ -128,21 +124,15 @@ export default function ApprovedClaimsLedgerPage() {
       return;
     }
 
+    if (!activeBrand?.id || !claim.id) return;
     const nextStatus = claim.status === 'APPROVED' ? 'EXPIRED' : 'APPROVED';
-    if (activeBrand?.id && claim.id) {
-      try {
-        const updated = await claimsService.updateClaimStatus(activeBrand.id, claim.id, nextStatus);
-        setClaims((prev) => prev.map((c) => (c.id === claim.id ? updated : c)));
-      } catch (err) {
-        toastError('Status Update Failed', err.message);
-        return;
-      }
-    } else {
-      setClaims((prev) =>
-        prev.map((c) => (c.id === claim.id ? { ...c, status: nextStatus, isExpired: nextStatus === 'EXPIRED' } : c))
-      );
+    try {
+      const updated = await claimsService.updateClaimStatus(activeBrand.id, claim.id, nextStatus);
+      setClaims((prev) => prev.map((c) => (c.id === claim.id ? updated : c)));
+      success('Claim Status Updated', `Status changed to ${nextStatus}.`);
+    } catch (err) {
+      toastError('Status Update Failed', err.message);
     }
-    success('Claim Status Updated', `Status changed to ${nextStatus}.`);
   };
 
   const columns = [
@@ -320,6 +310,25 @@ export default function ApprovedClaimsLedgerPage() {
         <div className="py-12 flex justify-center">
           <LoadingSpinner label="Loading claims ledger..." />
         </div>
+      ) : filtered.length === 0 ? (
+        <Card className="p-8">
+          <EmptyState
+            title="No approved claims found"
+            description={
+              search || statusFilter !== 'ALL'
+                ? 'No claims match your search filters.'
+                : 'No verified claims have been registered for this workspace yet.'
+            }
+            action={
+              canManageClaims && !search && statusFilter === 'ALL' ? (
+                <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Register First Claim
+                </Button>
+              ) : null
+            }
+          />
+        </Card>
       ) : (
         <DataTable
           columns={columns}

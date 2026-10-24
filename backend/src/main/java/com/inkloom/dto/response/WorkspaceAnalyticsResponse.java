@@ -20,6 +20,8 @@ public class WorkspaceAnalyticsResponse {
     private int ambiguityIndex;
     private String mostViolatedCategory;
     private Map<String, String> metricExplanations = new HashMap<>();
+    private List<CategoryTrendDto> categoryTrends = new ArrayList<>();
+    private List<RecentActivityDto> recentActivity = new ArrayList<>();
 
     public WorkspaceAnalyticsResponse() {}
 
@@ -64,4 +66,8 @@ public class WorkspaceAnalyticsResponse {
     public void setMostViolatedCategory(String mostViolatedCategory) { this.mostViolatedCategory = mostViolatedCategory; }
     public Map<String, String> getMetricExplanations() { return metricExplanations; }
     public void setMetricExplanations(Map<String, String> metricExplanations) { this.metricExplanations = metricExplanations; }
+    public List<CategoryTrendDto> getCategoryTrends() { return categoryTrends; }
+    public void setCategoryTrends(List<CategoryTrendDto> categoryTrends) { this.categoryTrends = categoryTrends; }
+    public List<RecentActivityDto> getRecentActivity() { return recentActivity; }
+    public void setRecentActivity(List<RecentActivityDto> recentActivity) { this.recentActivity = recentActivity; }
 }

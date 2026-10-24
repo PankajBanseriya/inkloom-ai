@@ -7,7 +7,6 @@ import EmptyState from '../components/feedback/EmptyState';
 import LoadingSpinner from '../components/feedback/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 import analyticsService from '../services/analyticsService';
-import { MOCK_HEATMAP_DATA } from '../mock/mockData';
 import {
   BarChart3,
   AlertTriangle,
@@ -32,24 +31,11 @@ export default function ClarityHeatmapPage() {
     analyticsService.getWorkspaceAnalytics(activeBrand.id)
       .then((data) => {
         if (data) setAnalytics(data);
+        else setAnalytics(null);
       })
       .catch((err) => {
-        console.warn('Could not load live analytics, using fallback:', err.message);
-        // Fallback only if server completely unreachable
-        setAnalytics({
-          hasSufficientData: true,
-          issuesIdentified: MOCK_HEATMAP_DATA.summary.totalFindingsAnalyzed,
-          avgComplianceScore: parseFloat(MOCK_HEATMAP_DATA.summary.avgComplianceRate),
-          mostViolatedCategory: 'PROHIBITED_TERMINOLOGY',
-          ambiguityIndex: MOCK_HEATMAP_DATA.summary.guidelineAmbiguityIndex,
-          heatmapMatrix: MOCK_HEATMAP_DATA.matrix,
-          metricExplanations: {
-            totalFindingsAnalyzed: 'Cumulative count of all governance flags identified across historical reviews.',
-            avgComplianceRate: 'Arithmetic mean of compliance scores across all submitted content in this workspace.',
-            acceptanceRate: 'Percentage of suggested corrections accepted without manual overrides or rejections.',
-            ambiguityIndex: 'Number of brand categories where author rejection rates exceed 30% or source documents are missing.',
-          },
-        });
+        console.warn('Could not load live analytics:', err.message);
+        setAnalytics(null);
       })
       .finally(() => setLoading(false));
   }, [activeBrand?.id]);

@@ -48,7 +48,7 @@ All successful responses return HTTP 200/201 wrapped in an `ApiResponse<T>` enve
 {
   "fullName": "Sarah Jenkins",
   "email": "sarah.jenkins@acme.internal",
-  "password": "Password123!",
+  "password": "demo-pass",
   "role": "REVIEWER",
   "workspaceName": "Acme Enterprise"
 }
@@ -63,7 +63,7 @@ All successful responses return HTTP 200/201 wrapped in an `ApiResponse<T>` enve
 ```json
 {
   "email": "sarah.jenkins@acme.internal",
-  "password": "Password123!"
+  "password": "demo-pass"
 }
 ```
 - **Response**: HTTP 200 OK with `token` and `user` payload.

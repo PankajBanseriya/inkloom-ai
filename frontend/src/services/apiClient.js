@@ -43,15 +43,17 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      if (response.status === 401) {
+      const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/register');
+      if (response.status === 401 && !isAuthEndpoint) {
         this.setToken(null);
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('inkloom_unauthorized', { detail: { endpoint } }));
         }
       }
-      const error = new Error(
-        (data && data.message) || `HTTP error ${response.status}: ${response.statusText}`
-      );
+      const message =
+        (data && (data.error?.details || data.message)) ||
+        `HTTP error ${response.status}: ${response.statusText}`;
+      const error = new Error(message);
       error.status = response.status;
       error.data = data;
       throw error;

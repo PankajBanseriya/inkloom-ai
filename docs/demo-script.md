@@ -4,9 +4,9 @@
 **Target Duration**: 5 minutes  
 **Target Audience**: Hackathon Judges, Enterprise Architects, Brand Directors  
 **Preset Credentials**:
-- **Brand Manager / Admin**: `alex.brand@acme.internal` / `password123`
-- **Reviewer**: `sarah.jenkins@acme.internal` / `password123`
-- **Content Creator**: `marcus.content@acme.internal` / `password123`
+- **Brand Manager / Admin**: `alex.brand@acme.internal` / `demo-pass`
+- **Reviewer**: `sarah.jenkins@acme.internal` / `demo-pass`
+- **Content Creator**: `marcus.content@acme.internal` / `demo-pass`
 
 ---
 

@@ -13,6 +13,7 @@ public class BrandWorkspaceResponse {
     private String ownerUserId;
     private int memberCount;
     private String activeGuidelinesVersion;
+    private Double complianceScore = 100.0;
     private Instant createdAt;
 
     public BrandWorkspaceResponse() {}
@@ -45,6 +46,8 @@ public class BrandWorkspaceResponse {
     public void setMemberCount(int memberCount) { this.memberCount = memberCount; }
     public String getActiveGuidelinesVersion() { return activeGuidelinesVersion; }
     public void setActiveGuidelinesVersion(String activeGuidelinesVersion) { this.activeGuidelinesVersion = activeGuidelinesVersion; }
+    public Double getComplianceScore() { return complianceScore; }
+    public void setComplianceScore(Double complianceScore) { this.complianceScore = complianceScore; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 }

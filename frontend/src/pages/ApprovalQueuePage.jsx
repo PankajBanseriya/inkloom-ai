@@ -8,9 +8,10 @@ import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import FormField from '../components/common/FormField';
 import LoadingSpinner from '../components/feedback/LoadingSpinner';
+import EmptyState from '../components/feedback/EmptyState';
+import Card from '../components/common/Card';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { MOCK_APPROVAL_QUEUE } from '../mock/mockData';
 import reviewService from '../services/reviewService';
 import approvalService from '../services/approvalService';
 import {
@@ -26,8 +27,8 @@ export default function ApprovalQueuePage() {
   const { success, warning, error: toastError } = useToast();
   const canDecide = user?.role === 'REVIEWER' || user?.role === 'BRAND_MANAGER' || user?.role === 'ADMIN';
 
-  const [queue, setQueue] = useState(MOCK_APPROVAL_QUEUE);
-  const [loading, setLoading] = useState(false);
+  const [queue, setQueue] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
@@ -67,10 +68,13 @@ export default function ApprovalQueuePage() {
             };
           });
           setQueue(mapped);
+        } else {
+          setQueue([]);
         }
       })
       .catch((err) => {
-        console.warn('Could not load reviews from API, using cached data:', err.message);
+        console.warn('Could not load reviews from API:', err.message);
+        setQueue([]);
       })
       .finally(() => setLoading(false));
   }, [activeBrand?.id]);
@@ -136,7 +140,7 @@ export default function ApprovalQueuePage() {
       const data = await approvalService.getComments(item.id);
       setCommentsList(data || []);
     } catch {
-      setCommentsList(item.comments || []);
+      setCommentsList([]);
     } finally {
       setCommentsLoading(false);
     }
@@ -332,6 +336,17 @@ export default function ApprovalQueuePage() {
         <div className="py-12 flex justify-center">
           <LoadingSpinner label="Loading approval queue..." />
         </div>
+      ) : filtered.length === 0 ? (
+        <Card className="p-8">
+          <EmptyState
+            title="No submissions in queue"
+            description={
+              search || statusFilter !== 'ALL'
+                ? 'No submissions match your active filter criteria.'
+                : 'The approval queue is clear. Submissions requiring human sign-off will appear here.'
+            }
+          />
+        </Card>
       ) : (
         <DataTable
           columns={columns}

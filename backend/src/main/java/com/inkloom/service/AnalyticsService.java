@@ -1,14 +1,20 @@
 package com.inkloom.service;
 
 import com.inkloom.dto.response.CategoryHeatmapItemDto;
+import com.inkloom.dto.response.CategoryTrendDto;
+import com.inkloom.dto.response.RecentActivityDto;
 import com.inkloom.dto.response.WorkspaceAnalyticsResponse;
 import com.inkloom.exception.ResourceNotFoundException;
+import com.inkloom.model.AuditEvent;
 import com.inkloom.model.Finding;
 import com.inkloom.model.Review;
 import com.inkloom.model.ReviewFeedback;
+import com.inkloom.model.User;
+import com.inkloom.repository.AuditEventRepository;
 import com.inkloom.repository.BrandWorkspaceRepository;
 import com.inkloom.repository.ReviewFeedbackRepository;
 import com.inkloom.repository.ReviewRepository;
+import com.inkloom.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -21,18 +27,30 @@ public class AnalyticsService {
     private final ReviewRepository reviewRepository;
     private final BrandWorkspaceRepository workspaceRepository;
     private final ReviewFeedbackRepository feedbackRepository;
+    private final AuditEventRepository auditEventRepository;
+    private final UserRepository userRepository;
 
     @Autowired
     public AnalyticsService(ReviewRepository reviewRepository,
                             BrandWorkspaceRepository workspaceRepository,
-                            ReviewFeedbackRepository feedbackRepository) {
+                            ReviewFeedbackRepository feedbackRepository,
+                            AuditEventRepository auditEventRepository,
+                            UserRepository userRepository) {
         this.reviewRepository = reviewRepository;
         this.workspaceRepository = workspaceRepository;
         this.feedbackRepository = feedbackRepository;
+        this.auditEventRepository = auditEventRepository;
+        this.userRepository = userRepository;
+    }
+
+    public AnalyticsService(ReviewRepository reviewRepository,
+                            BrandWorkspaceRepository workspaceRepository,
+                            ReviewFeedbackRepository feedbackRepository) {
+        this(reviewRepository, workspaceRepository, feedbackRepository, null, null);
     }
 
     public AnalyticsService(ReviewRepository reviewRepository, BrandWorkspaceRepository workspaceRepository) {
-        this(reviewRepository, workspaceRepository, null);
+        this(reviewRepository, workspaceRepository, null, null, null);
     }
 
     public WorkspaceAnalyticsResponse getWorkspaceAnalytics(String brandId) {
@@ -88,6 +106,51 @@ public class AnalyticsService {
         explanations.put("acceptanceRate", "Percentage of suggested corrections accepted without manual overrides or rejections.");
         explanations.put("ambiguityIndex", "Count of brand categories with friction signals (e.g. repeated unverified claims or author rejection rate > 30%).");
         response.setMetricExplanations(explanations);
+
+        // Category trends
+        List<CategoryTrendDto> categoryTrends = new ArrayList<>();
+        long totalIssues = issuesIdentified;
+        for (Map.Entry<String, Long> entry : categoryBreakdown.entrySet()) {
+            String cat = entry.getKey();
+            long count = entry.getValue();
+            int pct = totalIssues > 0 ? (int) Math.round((count * 100.0) / totalIssues) : 0;
+            String severity = "PROHIBITED_TERMINOLOGY".equalsIgnoreCase(cat) || "UNSUPPORTED_CLAIM".equalsIgnoreCase(cat) ? "CRITICAL"
+                    : "BRAND_TONE".equalsIgnoreCase(cat) ? "WARNING" : "INFO";
+            categoryTrends.add(new CategoryTrendDto(cat.replace('_', ' '), count, pct, severity));
+        }
+        categoryTrends.sort((a, b) -> Long.compare(b.getCount(), a.getCount()));
+        response.setCategoryTrends(categoryTrends);
+
+        // Recent activity from AuditEvents
+        List<RecentActivityDto> recentActivities = new ArrayList<>();
+        if (auditEventRepository != null) {
+            List<AuditEvent> events = auditEventRepository.findByBrandIdOrderByTimestampDesc(brandId);
+            int limit = Math.min(events.size(), 10);
+            for (int i = 0; i < limit; i++) {
+                AuditEvent ev = events.get(i);
+                String userName = "Governance Team";
+                String userRole = "REVIEWER";
+                if (ev.getUserId() != null && userRepository != null) {
+                    Optional<User> u = userRepository.findById(ev.getUserId());
+                    if (u.isPresent()) {
+                        userName = u.get().getFullName();
+                        userRole = u.get().getRole().name();
+                    } else if (ev.getUserId().contains("@")) {
+                        userName = ev.getUserId();
+                    }
+                }
+                String timeStr = ev.getTimestamp() != null ? ev.getTimestamp().toString() : "Recent";
+                recentActivities.add(new RecentActivityDto(
+                        ev.getId() != null ? ev.getId() : "act-" + i,
+                        userName,
+                        userRole,
+                        ev.getEventType() != null ? ev.getEventType().replace('_', ' ') : "Action Logged",
+                        ev.getDescription() != null ? ev.getDescription() : ev.getResourceType(),
+                        timeStr
+                ));
+            }
+        }
+        response.setRecentActivity(recentActivities);
 
         if (!hasSufficientData) {
             response.setAmbiguityIndex(0);

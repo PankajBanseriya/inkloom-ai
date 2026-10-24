@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { MOCK_BRANDS, MOCK_TEAM_MEMBERS } from '../mock/mockData';
 import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
+import brandService from '../services/brandService';
 
 const AuthContext = createContext(null);
 
@@ -9,30 +9,43 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('inkloom_user');
     if (saved) {
-      try { return JSON.parse(saved); } catch { /* ignore */ }
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.token) {
+          apiClient.setToken(parsed.token);
+          return parsed;
+        }
+      } catch {
+        /* ignore */
+      }
     }
-    return {
-      id: 'user-02',
-      name: 'Sarah Jenkins',
-      email: 'sarah.jenkins@acme.internal',
-      role: 'REVIEWER',
-      token: localStorage.getItem('inkloom_token') || 'demo-jwt-token-reviewer',
-    };
+    return null;
   });
+
+  const [brands, setBrands] = useState([]);
+  const [isLoadingBrands, setIsLoadingBrands] = useState(false);
 
   const [activeBrand, setActiveBrand] = useState(() => {
     const savedBrand = localStorage.getItem('inkloom_active_brand');
     if (savedBrand) {
-      try { return JSON.parse(savedBrand); } catch { /* ignore */ }
+      try {
+        return JSON.parse(savedBrand);
+      } catch {
+        /* ignore */
+      }
     }
-    return MOCK_BRANDS[0];
+    return null;
   });
 
   const logout = useCallback(() => {
     authService.logout();
-    setUser(null);
+    apiClient.setToken(null);
     localStorage.removeItem('inkloom_token');
     localStorage.removeItem('inkloom_user');
+    localStorage.removeItem('inkloom_active_brand');
+    setUser(null);
+    setBrands([]);
+    setActiveBrand(null);
   }, []);
 
   // Listen to 401 unauthorized session expiry events from apiClient
@@ -56,77 +69,85 @@ export function AuthProvider({ children }) {
       }
     } else {
       localStorage.removeItem('inkloom_user');
+      localStorage.removeItem('inkloom_token');
+      apiClient.setToken(null);
+    }
+  }, [user]);
+
+  // Synchronize activeBrand to localStorage
+  useEffect(() => {
+    if (activeBrand) {
+      localStorage.setItem('inkloom_active_brand', JSON.stringify(activeBrand));
+    } else {
+      localStorage.removeItem('inkloom_active_brand');
+    }
+  }, [activeBrand]);
+
+  // Fetch workspaces for current user from backend
+  const fetchBrands = useCallback(async () => {
+    if (!user) {
+      setBrands([]);
+      return;
+    }
+    try {
+      setIsLoadingBrands(true);
+      const list = await brandService.getBrands();
+      const loadedBrands = list || [];
+      setBrands(loadedBrands);
+
+      if (loadedBrands.length > 0) {
+        setActiveBrand((current) => {
+          if (!current || !loadedBrands.some((b) => b.id === current.id)) {
+            return loadedBrands[0];
+          }
+          return current;
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load workspaces from backend:', err.message);
+    } finally {
+      setIsLoadingBrands(false);
     }
   }, [user]);
 
   useEffect(() => {
-    if (activeBrand) {
-      localStorage.setItem('inkloom_active_brand', JSON.stringify(activeBrand));
-    }
-  }, [activeBrand]);
+    fetchBrands();
+  }, [fetchBrands]);
 
-  const login = async (email, password, roleFallback = 'REVIEWER') => {
-    try {
-      const data = await authService.login(email, password);
-      const authenticatedUser = {
-        id: data.user.id,
-        name: data.user.fullName,
-        email: data.user.email,
-        role: data.user.role,
-        workspaceIds: data.user.workspaceIds,
-        token: data.token,
-      };
-      setUser(authenticatedUser);
-      return authenticatedUser;
-    } catch (err) {
-      // In offline / local mock demo mode, fallback smoothly if backend unreachable
-      if (err.message && err.message.includes('Failed to fetch')) {
-        const matched = MOCK_TEAM_MEMBERS.find((m) => m.email.toLowerCase() === email.toLowerCase());
-        const fallbackUser = {
-          id: matched ? matched.id : 'user-custom',
-          name: matched ? matched.name : email.split('@')[0],
-          email,
-          role: matched ? matched.role : roleFallback,
-          token: 'demo-jwt-token-' + Date.now(),
-        };
-        setUser(fallbackUser);
-        return fallbackUser;
-      }
-      throw err;
-    }
+  const login = async (email, password) => {
+    const data = await authService.login(email, password);
+    const authenticatedUser = {
+      id: data.user.id,
+      name: data.user.fullName,
+      email: data.user.email,
+      role: data.user.role,
+      workspaceIds: data.user.workspaceIds || [],
+      token: data.token,
+    };
+    apiClient.setToken(data.token);
+    localStorage.setItem('inkloom_user', JSON.stringify(authenticatedUser));
+    setUser(authenticatedUser);
+    return authenticatedUser;
   };
 
   const register = async (fullName, email, password, role = 'CONTENT_CREATOR', workspaceName = '') => {
-    try {
-      const data = await authService.register({ fullName, email, password, role, workspaceName });
-      const authenticatedUser = {
-        id: data.user.id,
-        name: data.user.fullName,
-        email: data.user.email,
-        role: data.user.role,
-        workspaceIds: data.user.workspaceIds,
-        token: data.token,
-      };
-      setUser(authenticatedUser);
-      return authenticatedUser;
-    } catch (err) {
-      if (err.message && err.message.includes('Failed to fetch')) {
-        const fallbackUser = {
-          id: 'user-' + Date.now().toString(36),
-          name: fullName,
-          email,
-          role,
-          token: 'demo-jwt-token-new-' + Date.now(),
-        };
-        setUser(fallbackUser);
-        return fallbackUser;
-      }
-      throw err;
-    }
+    const data = await authService.register({ fullName, email, password, role, workspaceName });
+    const authenticatedUser = {
+      id: data.user.id,
+      name: data.user.fullName,
+      email: data.user.email,
+      role: data.user.role,
+      workspaceIds: data.user.workspaceIds || [],
+      token: data.token,
+    };
+    apiClient.setToken(data.token);
+    localStorage.setItem('inkloom_user', JSON.stringify(authenticatedUser));
+    setUser(authenticatedUser);
+    return authenticatedUser;
   };
 
   const switchBrand = (brandId) => {
-    const found = MOCK_BRANDS.find((b) => b.id === brandId);
+    const found = brands.find((b) => b.id === brandId);
     if (found) {
       setActiveBrand(found);
     }
@@ -138,11 +159,14 @@ export function AuthProvider({ children }) {
         user,
         isAuthenticated: !!user,
         activeBrand,
-        brands: MOCK_BRANDS,
+        brands,
+        isLoadingBrands,
+        refreshBrands: fetchBrands,
         login,
         register,
         logout,
         switchBrand,
+        setActiveBrand,
       }}
     >
       {children}

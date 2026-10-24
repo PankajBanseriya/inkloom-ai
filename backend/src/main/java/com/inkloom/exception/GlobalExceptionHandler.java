@@ -82,9 +82,23 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ex.getMessage(), errorDetails));
     }
 
-    @ExceptionHandler({UnauthorizedAccessException.class, AccessDeniedException.class})
+    @ExceptionHandler(UnauthorizedAccessException.class)
     public ResponseEntity<ApiResponse<Void>> handleUnauthorizedAccess(
-            Exception ex, HttpServletRequest request) {
+            UnauthorizedAccessException ex, HttpServletRequest request) {
+        ErrorDetails errorDetails = new ErrorDetails(
+                "UNAUTHORIZED",
+                ex.getMessage() != null ? ex.getMessage() : "Authentication is required to access this resource",
+                request.getRequestURI()
+        );
+
+        log.warn("Unauthorized access on path {}: {}", request.getRequestURI(), ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.fail(ex.getMessage(), errorDetails));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(
+            AccessDeniedException ex, HttpServletRequest request) {
         ErrorDetails errorDetails = new ErrorDetails(
                 "FORBIDDEN",
                 ex.getMessage() != null ? ex.getMessage() : "Access denied to requested resource",

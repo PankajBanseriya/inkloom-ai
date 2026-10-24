@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import FilterBar from '../components/common/FilterBar';
@@ -7,20 +7,25 @@ import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import Input from '../components/common/Input';
 import FormField from '../components/common/FormField';
+import LoadingSpinner from '../components/feedback/LoadingSpinner';
+import EmptyState from '../components/feedback/EmptyState';
+import Card from '../components/common/Card';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
-import { MOCK_APPROVED_SOURCES } from '../mock/mockData';
-import { Plus, ExternalLink, ShieldCheck } from 'lucide-react';
+import brandService from '../services/brandService';
+import { Plus, ExternalLink, ShieldCheck, RefreshCw, Trash2 } from 'lucide-react';
 
 export default function ApprovedSourcesPage() {
   const { activeBrand, user } = useAuth();
-  const { success } = useToast();
+  const { success, error: toastError, info } = useToast();
   const canManageSources = user?.role === 'BRAND_MANAGER' || user?.role === 'ADMIN';
 
-  const [sources, setSources] = useState(MOCK_APPROVED_SOURCES);
+  const [sources, setSources] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [newTitle, setNewTitle] = useState('');
   const [newType, setNewType] = useState('POLICY');
@@ -29,37 +34,78 @@ export default function ApprovedSourcesPage() {
   const [newExcerpt, setNewExcerpt] = useState('');
   const [newUrl, setNewUrl] = useState('');
 
+  const fetchSources = useCallback(async () => {
+    if (!activeBrand?.id) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await brandService.getSources(activeBrand.id);
+      setSources(data || []);
+    } catch (err) {
+      console.warn('Failed to load approved sources:', err.message);
+      setSources([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [activeBrand?.id]);
+
+  useEffect(() => {
+    fetchSources();
+  }, [fetchSources]);
+
   const filtered = sources.filter((s) => {
+    const titleStr = s.title || '';
+    const excerptStr = s.excerpt || '';
+    const ownerStr = s.owner || '';
     const matchesSearch =
-      s.title.toLowerCase().includes(search.toLowerCase()) ||
-      s.excerpt.toLowerCase().includes(search.toLowerCase()) ||
-      s.owner.toLowerCase().includes(search.toLowerCase());
+      titleStr.toLowerCase().includes(search.toLowerCase()) ||
+      excerptStr.toLowerCase().includes(search.toLowerCase()) ||
+      ownerStr.toLowerCase().includes(search.toLowerCase());
     const matchesType = typeFilter === 'ALL' || s.sourceType === typeFilter;
     return matchesSearch && matchesType;
   });
 
-  const handleAddSource = (e) => {
+  const handleAddSource = async (e) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
+    if (!newTitle.trim() || !activeBrand?.id) return;
 
-    const sourceObj = {
-      id: `src-${Date.now().toString(36)}`,
-      title: newTitle,
+    setIsSubmitting(true);
+    const payload = {
+      title: newTitle.trim(),
       sourceType: newType,
-      owner: newOwner || 'Compliance Department',
-      status: 'APPROVED',
-      version: newVersion || '1.0',
-      lastReviewed: new Date().toISOString().split('T')[0],
-      referenceUrl: newUrl || 'https://docs.acme.internal/spec.pdf',
-      excerpt: newExcerpt || 'Approved factual benchmark record.',
+      owner: newOwner.trim() || 'Compliance Department',
+      version: newVersion.trim() || '1.0',
+      excerpt: newExcerpt.trim() || 'Approved factual benchmark record.',
+      referenceUrl: newUrl.trim() || 'https://docs.acme.internal/spec.pdf',
     };
 
-    setSources((prev) => [sourceObj, ...prev]);
-    setIsModalOpen(false);
-    setNewTitle('');
-    setNewExcerpt('');
-    setNewUrl('');
-    success('Approved Source Registered', `Registered "${sourceObj.title}" for evidence verification.`);
+    try {
+      const saved = await brandService.createSource(activeBrand.id, payload);
+      setSources((prev) => [saved, ...prev]);
+      setIsModalOpen(false);
+      setNewTitle('');
+      setNewExcerpt('');
+      setNewUrl('');
+      setNewOwner('');
+      success('Approved Source Registered', `Registered "${saved.title}" for evidence verification.`);
+    } catch (err) {
+      toastError('Registration Failed', err.message || 'Unable to register source');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteSource = async (sourceId) => {
+    if (!canManageSources || !activeBrand?.id) return;
+    try {
+      await brandService.deleteSource(activeBrand.id, sourceId);
+      setSources((prev) => prev.filter((s) => s.id !== sourceId));
+      info('Source Deleted', 'Approved source removed from governance ledger.');
+    } catch (err) {
+      toastError('Deletion Failed', err.message || 'Unable to delete source');
+    }
   };
 
   const columns = [
@@ -75,12 +121,21 @@ export default function ApprovedSourcesPage() {
           <div className="flex items-center space-x-2 mt-1.5 text-[10px] text-ink-400">
             <span className="font-mono">{row.id}</span>
             <span>•</span>
-            <span>v{row.version}</span>
-            <span>•</span>
-            <span className="text-brand-600 flex items-center hover:underline cursor-pointer">
-              <ExternalLink className="w-3 h-3 mr-0.5" />
-              Reference Link
-            </span>
+            <span>v{row.version || '1.0'}</span>
+            {row.referenceUrl && (
+              <>
+                <span>•</span>
+                <a
+                  href={row.referenceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-brand-600 flex items-center hover:underline"
+                >
+                  <ExternalLink className="w-3 h-3 mr-0.5" />
+                  Reference Link
+                </a>
+              </>
+            )}
           </div>
         </div>
       ),
@@ -90,39 +145,59 @@ export default function ApprovedSourcesPage() {
       header: 'Document Type',
       render: (val) => (
         <span className="font-semibold text-xs text-ink-700 bg-ink-100 px-2 py-0.5 rounded border border-ink-200">
-          {val.replace(/_/g, ' ')}
+          {(val || 'POLICY').replace(/_/g, ' ')}
         </span>
       ),
     },
     {
       key: 'owner',
       header: 'Department Owner',
-      render: (val) => <span className="font-medium text-ink-800">{val}</span>,
+      render: (val) => <span className="font-medium text-ink-800 text-xs">{val || 'Unassigned'}</span>,
     },
     {
       key: 'status',
       header: 'Verification Status',
-      render: (val) => <StatusBadge status={val} />,
+      render: (val) => <StatusBadge status={val || 'APPROVED'} />,
     },
     {
-      key: 'lastReviewed',
-      header: 'Last Reviewed',
-      render: (val) => <span className="text-xs text-ink-500">{val}</span>,
+      key: 'actions',
+      header: 'Actions',
+      render: (_, row) => (
+        canManageSources ? (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleDeleteSource(row.id)}
+            className="text-[11px] px-2 py-1 h-7 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+            title="Delete approved source"
+          >
+            <Trash2 className="w-3 h-3" />
+          </Button>
+        ) : (
+          <span className="text-[11px] text-ink-400 italic">View only</span>
+        )
+      ),
     },
   ];
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`${activeBrand?.name || 'Acme'} Approved Sources & Evidence`}
+        title={`${activeBrand?.name || 'Workspace'} Approved Sources & Evidence`}
         description="Ground-truth documentation repository used to substantiate factual claims and verify evidence citations."
         actions={
-          canManageSources ? (
-            <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
-              <Plus className="w-4 h-4 mr-1.5" />
-              Register Approved Source
+          <div className="flex items-center space-x-2">
+            <Button size="sm" variant="outline" onClick={fetchSources} className="text-xs">
+              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
             </Button>
-          ) : null
+            {canManageSources && (
+              <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
+                <Plus className="w-4 h-4 mr-1.5" />
+                Register Approved Source
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -167,11 +242,32 @@ export default function ApprovedSourcesPage() {
         }}
       />
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        keyField="id"
-      />
+      {loading ? (
+        <div className="py-16 flex justify-center bg-white rounded-xl border border-ink-200">
+          <LoadingSpinner label="Loading approved sources from database..." />
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card className="py-12">
+          <EmptyState
+            title="No Approved Sources Registered"
+            description="Verified documents and technical specifications ground claims in empirical evidence. Register source documents to enable evidence verification."
+            action={
+              canManageSources ? (
+                <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
+                  <Plus className="w-4 h-4 mr-1.5" />
+                  Register First Source
+                </Button>
+              ) : null
+            }
+          />
+        </Card>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          keyField="id"
+        />
+      )}
 
       {/* Register Source Modal */}
       <Modal
@@ -242,7 +338,7 @@ export default function ApprovedSourcesPage() {
             <Button size="sm" variant="outline" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" variant="primary" type="submit">
+            <Button size="sm" variant="primary" type="submit" isLoading={isSubmitting}>
               Register Document
             </Button>
           </div>

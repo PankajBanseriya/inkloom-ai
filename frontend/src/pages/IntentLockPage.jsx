@@ -3,10 +3,11 @@ import { useParams, Link } from 'react-router-dom';
 import PageHeader from '../components/common/PageHeader';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
+import LoadingSpinner from '../components/feedback/LoadingSpinner';
+import EmptyState from '../components/feedback/EmptyState';
 import IntentLockComparison from '../features/revisions/IntentLockComparison';
 import { useToast } from '../context/ToastContext';
 import { ROUTES } from '../constants/routes';
-import { MOCK_REVIEWS } from '../mock/mockData';
 import reviewService from '../services/reviewService';
 import { ArrowLeft, CheckCircle2, History } from 'lucide-react';
 
@@ -14,23 +15,28 @@ export default function IntentLockPage() {
   const { reviewId } = useParams();
   const { success, info, error: toastError } = useToast();
 
-  const [review, setReview] = useState(() => MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0]);
-  const [findings, setFindings] = useState(review.findings || []);
+  const [review, setReview] = useState(null);
+  const [findings, setFindings] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [activeFindingIndex, setActiveFindingIndex] = useState(0);
 
   useEffect(() => {
-    if (reviewId) {
-      reviewService.getReviewById(reviewId)
-        .then((data) => {
-          if (data) {
-            setReview(data);
-            setFindings(data.findings || []);
-          }
-        })
-        .catch((err) => {
-          console.warn('Could not load live review, using mock fallback:', err.message);
-        });
+    if (!reviewId) {
+      setLoading(false);
+      return;
     }
+    setLoading(true);
+    reviewService.getReviewById(reviewId)
+      .then((data) => {
+        if (data) {
+          setReview(data);
+          setFindings(data.findings || []);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load review:', err.message);
+      })
+      .finally(() => setLoading(false));
   }, [reviewId]);
 
   const activeFinding = findings[activeFindingIndex] || findings[0];
@@ -76,6 +82,32 @@ export default function IntentLockPage() {
       setFindings([]);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="py-16 flex justify-center">
+        <LoadingSpinner label="Loading Intent Lock workbench..." />
+      </div>
+    );
+  }
+
+  if (!review) {
+    return (
+      <div className="p-8">
+        <EmptyState
+          title="Review not found"
+          description="The requested review could not be retrieved from the database."
+          action={
+            <Link to={ROUTES.DASHBOARD}>
+              <Button size="sm" variant="outline">
+                Back to Dashboard
+              </Button>
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

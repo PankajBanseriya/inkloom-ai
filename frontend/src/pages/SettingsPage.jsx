@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import PageHeader from '../components/common/PageHeader';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
@@ -12,10 +12,17 @@ export default function SettingsPage() {
   const { user, activeBrand } = useAuth();
   const { success } = useToast();
 
-  const [name, setName] = useState(user?.name || 'Sarah Jenkins');
-  const [email] = useState(user?.email || 'sarah.jenkins@acme.internal');
+  const [name, setName] = useState(user?.fullName || user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [strictEnforcement, setStrictEnforcement] = useState(true);
   const [emailAlerts, setEmailAlerts] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      setName(user.fullName || user.name || '');
+      setEmail(user.email || '');
+    }
+  }, [user]);
 
   const handleSaveProfile = (e) => {
     e.preventDefault();

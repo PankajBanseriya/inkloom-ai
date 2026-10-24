@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Import;
 
 @TestConfiguration
 @Import({
+        JacksonConfig.class,
         SecurityConfig.class,
         CorsConfig.class,
         JwtAuthenticationFilter.class,

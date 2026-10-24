@@ -2,15 +2,18 @@ package com.inkloom.service;
 
 import com.inkloom.dto.request.ApprovedSourceRequest;
 import com.inkloom.dto.request.BrandWorkspaceRequest;
+import com.inkloom.dto.request.InviteMemberRequest;
 import com.inkloom.dto.response.ApprovedSourceResponse;
 import com.inkloom.dto.response.BrandGuidelineResponse;
 import com.inkloom.dto.response.BrandWorkspaceResponse;
+import com.inkloom.dto.response.UserResponse;
 import com.inkloom.exception.ResourceNotFoundException;
 import com.inkloom.model.ApprovedSource;
 import com.inkloom.model.AuditEvent;
 import com.inkloom.model.BrandGuideline;
 import com.inkloom.model.BrandWorkspace;
 import com.inkloom.model.Role;
+import com.inkloom.model.User;
 import com.inkloom.repository.ApprovedSourceRepository;
 import com.inkloom.repository.AuditEventRepository;
 import com.inkloom.repository.BrandGuidelineRepository;
@@ -20,6 +23,8 @@ import com.inkloom.security.UserPrincipal;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -203,5 +208,123 @@ public class BrandWorkspaceService {
         ));
 
         return new ApprovedSourceResponse(saved);
+    }
+
+    public ApprovedSourceResponse updateSource(String brandId, String sourceId, ApprovedSourceRequest request) {
+        ApprovedSource source = sourceRepository.findById(sourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("ApprovedSource", "id", sourceId));
+
+        if (!source.getBrandId().equals(brandId)) {
+            throw new ResourceNotFoundException("ApprovedSource", "brandId", brandId);
+        }
+
+        source.setTitle(request.getTitle());
+        source.setSourceType(request.getSourceType());
+        source.setOwner(request.getOwner());
+        source.setExcerpt(request.getExcerpt());
+        source.setReferenceUrl(request.getReferenceUrl());
+        if (request.getVersion() != null) {
+            source.setVersion(request.getVersion());
+        }
+        source.setUpdatedAt(Instant.now());
+
+        ApprovedSource saved = sourceRepository.save(source);
+
+        auditEventRepository.save(new AuditEvent(
+                brandId,
+                null,
+                "SOURCE_UPDATED",
+                "ApprovedSource",
+                saved.getId(),
+                "Updated source: " + saved.getTitle()
+        ));
+
+        return new ApprovedSourceResponse(saved);
+    }
+
+    public void deleteSource(String brandId, String sourceId) {
+        ApprovedSource source = sourceRepository.findById(sourceId)
+                .orElseThrow(() -> new ResourceNotFoundException("ApprovedSource", "id", sourceId));
+
+        if (!source.getBrandId().equals(brandId)) {
+            throw new ResourceNotFoundException("ApprovedSource", "brandId", brandId);
+        }
+
+        sourceRepository.delete(source);
+
+        auditEventRepository.save(new AuditEvent(
+                brandId,
+                null,
+                "SOURCE_DELETED",
+                "ApprovedSource",
+                sourceId,
+                "Deleted source: " + source.getTitle()
+        ));
+    }
+
+    public List<UserResponse> getWorkspaceMembers(String brandId) {
+        BrandWorkspace workspace = workspaceRepository.findById(brandId)
+                .orElseThrow(() -> new ResourceNotFoundException("BrandWorkspace", "id", brandId));
+
+        if (userRepository == null) {
+            return Collections.emptyList();
+        }
+
+        return userRepository.findAll().stream()
+                .filter(u -> (u.getWorkspaceIds() != null && u.getWorkspaceIds().contains(brandId))
+                        || (workspace.getMemberUserIds() != null && workspace.getMemberUserIds().contains(u.getId()))
+                        || brandId.equals(workspace.getId()) && u.getId().equals(workspace.getOwnerUserId()))
+                .map(UserResponse::new)
+                .collect(Collectors.toList());
+    }
+
+    public UserResponse inviteMember(String brandId, InviteMemberRequest request, String inviterUserId) {
+        BrandWorkspace workspace = workspaceRepository.findById(brandId)
+                .orElseThrow(() -> new ResourceNotFoundException("BrandWorkspace", "id", brandId));
+
+        if (userRepository == null) {
+            throw new IllegalStateException("User repository not available");
+        }
+
+        User user = userRepository.findByEmail(request.getEmail().toLowerCase().trim())
+                .orElseGet(() -> {
+                    String initialHash = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder()
+                            .encode("ChangeMe123!");
+                    User newUser = new User(
+                            request.getEmail().toLowerCase().trim(),
+                            initialHash,
+                            request.getFullName().trim(),
+                            request.getRole() != null ? request.getRole() : Role.CONTENT_CREATOR
+                    );
+                    newUser.getWorkspaceIds().add(brandId);
+                    return userRepository.save(newUser);
+                });
+
+        if (!user.getWorkspaceIds().contains(brandId)) {
+            user.getWorkspaceIds().add(brandId);
+            if (request.getRole() != null) {
+                user.setRole(request.getRole());
+            }
+            user = userRepository.save(user);
+        }
+
+        if (workspace.getMemberUserIds() == null) {
+            workspace.setMemberUserIds(new ArrayList<>());
+        }
+        if (!workspace.getMemberUserIds().contains(user.getId())) {
+            workspace.getMemberUserIds().add(user.getId());
+            workspaceRepository.save(workspace);
+        }
+
+        auditEventRepository.save(new AuditEvent(
+                brandId,
+                inviterUserId,
+                "MEMBER_INVITED",
+                "User",
+                user.getId(),
+                "Invited member " + user.getFullName() + " (" + user.getRole() + ") to workspace"
+        ));
+
+        return new UserResponse(user);
     }
 }

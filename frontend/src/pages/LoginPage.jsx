@@ -12,8 +12,8 @@ export default function LoginPage() {
   const { login } = useAuth();
   const { success, error: toastError } = useToast();
 
-  const [email, setEmail] = useState('sarah.jenkins@acme.internal');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 

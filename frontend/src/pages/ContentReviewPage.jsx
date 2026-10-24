@@ -23,7 +23,16 @@ import {
   RefreshCw,
 } from 'lucide-react';
 
-const SAMPLE_DRAFT_TEXT = `Acme Enterprise announces our revolutionary next-generation cloud infrastructure platform. Our best-in-class multi-tenant database delivers unmatched 100% unbreakable security and guarantees 99.99% uptime for Fortune 500 enterprises. Independent benchmark evaluations prove our distributed architecture outperforms every competing database in the galaxy without exception.`;
+const DRAFT_TEMPLATE = `[Document Title]
+
+Executive Summary:
+[Summarize key product or service announcement]
+
+Specifications & Performance:
+[Insert verified performance details and source references]
+
+Scope & Availability:
+[Specify target audience, regional limitations, and deployment criteria]`;
 
 export default function ContentReviewPage() {
   const navigate = useNavigate();
@@ -32,9 +41,9 @@ export default function ContentReviewPage() {
 
   const [reviewId, setReviewId] = useState(null);
   const [contentType, setContentType] = useState('Press Release');
-  const [contentTitle, setContentTitle] = useState('Q4 Enterprise Infrastructure Announcement');
-  const [content, setContent] = useState(SAMPLE_DRAFT_TEXT);
-  const [originalContent, setOriginalContent] = useState(SAMPLE_DRAFT_TEXT);
+  const [contentTitle, setContentTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [originalContent, setOriginalContent] = useState('');
 
   const [status, setStatus] = useState('DRAFT'); // DRAFT, REVIEWING, COMPLETED, ERROR
   const [errorMessage, setErrorMessage] = useState(null);
@@ -377,13 +386,13 @@ export default function ContentReviewPage() {
               <button
                 type="button"
                 onClick={() => {
-                  setContent(SAMPLE_DRAFT_TEXT);
-                  info('Sample Loaded', 'Populated draft with governance test text.');
+                  setContent(DRAFT_TEMPLATE);
+                  info('Template Inserted', 'Inserted structural template for governance review.');
                 }}
                 className="text-[11px] font-semibold text-brand-600 hover:text-brand-700 whitespace-nowrap ml-2 hover:underline"
-                title="Populate test copy that exercises prohibited terms and claim verification"
+                title="Insert structural outline for governance review"
               >
-                Load Sample Draft
+                Insert Template
               </button>
             </div>
 

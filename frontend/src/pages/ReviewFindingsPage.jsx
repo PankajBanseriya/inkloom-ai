@@ -6,9 +6,10 @@ import Button from '../components/common/Button';
 import StatusBadge from '../components/common/StatusBadge';
 import FilterBar from '../components/common/FilterBar';
 import EvidenceCard from '../features/evidence/EvidenceCard';
+import LoadingSpinner from '../components/feedback/LoadingSpinner';
+import EmptyState from '../components/feedback/EmptyState';
 import { useToast } from '../context/ToastContext';
 import { ROUTES } from '../constants/routes';
-import { MOCK_REVIEWS } from '../mock/mockData';
 import reviewService from '../services/reviewService';
 import { ShieldAlert, ArrowLeft, GitCompare, Send } from 'lucide-react';
 
@@ -16,8 +17,9 @@ export default function ReviewFindingsPage() {
   const { reviewId } = useParams();
   const { success, info, error: toastError } = useToast();
 
-  const [review, setReview] = useState(() => MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0]);
-  const [findings, setFindings] = useState(review.findings || []);
+  const [review, setReview] = useState(null);
+  const [findings, setFindings] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedStrengths, setSelectedStrengths] = useState({
     'find-01': 'balanced',
     'find-02': 'balanced',
@@ -29,18 +31,22 @@ export default function ReviewFindingsPage() {
   const [severityFilter, setSeverityFilter] = useState('ALL');
 
   useEffect(() => {
-    if (reviewId) {
-      reviewService.getReviewById(reviewId)
-        .then((data) => {
-          if (data) {
-            setReview(data);
-            setFindings(data.findings || []);
-          }
-        })
-        .catch((err) => {
-          console.warn('Could not load live review, using mock fallback:', err.message);
-        });
+    if (!reviewId) {
+      setLoading(false);
+      return;
     }
+    setLoading(true);
+    reviewService.getReviewById(reviewId)
+      .then((data) => {
+        if (data) {
+          setReview(data);
+          setFindings(data.findings || []);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load live review:', err.message);
+      })
+      .finally(() => setLoading(false));
   }, [reviewId]);
 
   const handleSelectStrength = (id, str) => {
@@ -80,12 +86,42 @@ export default function ReviewFindingsPage() {
 
   const filtered = findings.filter((f) => {
     const matchesSearch =
-      f.title.toLowerCase().includes(search.toLowerCase()) ||
-      f.explanation.toLowerCase().includes(search.toLowerCase()) ||
-      f.excerpt.toLowerCase().includes(search.toLowerCase());
+      (f.title || '').toLowerCase().includes(search.toLowerCase()) ||
+      (f.explanation || '').toLowerCase().includes(search.toLowerCase()) ||
+      (f.excerpt || '').toLowerCase().includes(search.toLowerCase());
     const matchesSeverity = severityFilter === 'ALL' || f.severity === severityFilter;
     return matchesSearch && matchesSeverity;
   });
+
+  if (loading) {
+    return (
+      <div className="py-16 flex justify-center">
+        <LoadingSpinner label="Loading review findings and evidence..." />
+      </div>
+    );
+  }
+
+  if (!review) {
+    return (
+      <div className="p-8">
+        <EmptyState
+          title="Review not found"
+          description="The requested review could not be retrieved from the database."
+          action={
+            <Link to={ROUTES.DASHBOARD}>
+              <Button size="sm" variant="outline">
+                Back to Dashboard
+              </Button>
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  const score = Math.round(review.complianceScore != null ? review.complianceScore : 90);
+  const dateStr = review.createdAt ? String(review.createdAt).split('T')[0] : review.submissionDate || 'Recent';
+  const authorStr = review.authorUserId || review.author || 'Author';
 
   return (
     <div className="space-y-6">
@@ -99,10 +135,10 @@ export default function ReviewFindingsPage() {
       </div>
 
       <PageHeader
-        title={review.title}
-        description={`Content Type: ${review.contentType} • Submitted by ${review.author} on ${review.submissionDate}`}
-        badge={`${review.complianceScore}% Compliance`}
-        badgeVariant={review.complianceScore >= 80 ? 'brand' : 'warning'}
+        title={review.title || 'Review Findings'}
+        description={`Content Type: ${review.contentType || 'Document'} • Submitted by ${authorStr} on ${dateStr}`}
+        badge={`${score}% Compliance`}
+        badgeVariant={score >= 80 ? 'brand' : 'warning'}
         actions={
           <div className="flex items-center space-x-2">
             <Link to={`/reviews/${review.id}/intent-lock`}>
@@ -126,12 +162,12 @@ export default function ReviewFindingsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center space-x-4">
             <div className="w-12 h-12 rounded-xl bg-brand-50 border border-brand-200 flex items-center justify-center font-bold text-brand-700 text-lg">
-              {review.complianceScore}%
+              {score}%
             </div>
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="text-sm font-bold text-ink-900">Governance Evaluation Summary</h3>
-                <StatusBadge status={review.status} />
+                <StatusBadge status={review.status || 'IN_REVIEW'} />
               </div>
               <p className="text-xs text-ink-500 mt-0.5">
                 {findings.length} pending findings require resolution before human sign-off.
