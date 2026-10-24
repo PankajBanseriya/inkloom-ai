@@ -110,6 +110,38 @@ public class ReviewService {
             }
         }
 
+        // Check required expressions and mandatory legal disclaimers
+        if (guideline != null && guideline.getRequiredPhrases() != null && content.length() > 50) {
+            for (BrandGuideline.RequiredPhrase reqPhrase : guideline.getRequiredPhrases()) {
+                if (reqPhrase.isMandatory() && reqPhrase.getPhrase() != null && !reqPhrase.getPhrase().trim().isEmpty()) {
+                    String phraseText = reqPhrase.getPhrase().trim();
+                    if (!content.toLowerCase().contains(phraseText.toLowerCase())) {
+                        SuggestedCorrection correction = new SuggestedCorrection(
+                                "\n\n" + phraseText,
+                                "\n\n" + phraseText,
+                                "\n\nLegal Notice: " + phraseText,
+                                "Mandatory disclosure required by brand compliance policy: " + reqPhrase.getContext()
+                        );
+
+                        Finding reqFinding = new Finding(
+                                "find-" + UUID.randomUUID().toString().substring(0, 8),
+                                "REQUIRED_TERMINOLOGY",
+                                "WARNING",
+                                "VERIFIED_RULE",
+                                "Missing Mandatory Disclosure: \"" + phraseText + "\"",
+                                "[End of Content]",
+                                "Brand guidelines require including the following mandatory disclosure: \"" + phraseText + "\"",
+                                "Brand Guideline " + guideline.getVersion() + " (Rule ID: " + reqPhrase.getId() + ")",
+                                correction
+                        );
+                        reqFinding.setStartOffset(content.length());
+                        reqFinding.setEndOffset(content.length());
+                        findings.add(reqFinding);
+                    }
+                }
+            }
+        }
+
         // Check for expired claims
         if (claims != null) {
             for (ApprovedClaim claim : claims) {

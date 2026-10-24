@@ -15,6 +15,8 @@ public class Finding {
     private Integer endOffset;
     private SuggestedCorrection suggestedCorrections;
     private boolean resolved = false;
+    private Double confidence = 1.0;
+    private String referencedClaimId;
 
     public Finding() {}
 
@@ -69,4 +71,10 @@ public class Finding {
 
     public boolean isResolved() { return resolved; }
     public void setResolved(boolean resolved) { this.resolved = resolved; }
+
+    public Double getConfidence() { return confidence; }
+    public void setConfidence(Double confidence) { this.confidence = confidence; }
+
+    public String getReferencedClaimId() { return referencedClaimId; }
+    public void setReferencedClaimId(String referencedClaimId) { this.referencedClaimId = referencedClaimId; }
 }

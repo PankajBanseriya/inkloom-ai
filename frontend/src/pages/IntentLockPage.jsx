@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PageHeader from '../components/common/PageHeader';
 import Card from '../components/common/Card';
@@ -7,20 +7,49 @@ import IntentLockComparison from '../features/revisions/IntentLockComparison';
 import { useToast } from '../context/ToastContext';
 import { ROUTES } from '../constants/routes';
 import { MOCK_REVIEWS } from '../mock/mockData';
+import reviewService from '../services/reviewService';
 import { ArrowLeft, CheckCircle2, History } from 'lucide-react';
 
 export default function IntentLockPage() {
   const { reviewId } = useParams();
-  const { success, info } = useToast();
+  const { success, info, error: toastError } = useToast();
 
-  const review = MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0];
-
-  const [findings, setFindings] = useState(review.findings);
+  const [review, setReview] = useState(() => MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0]);
+  const [findings, setFindings] = useState(review.findings || []);
   const [activeFindingIndex, setActiveFindingIndex] = useState(0);
+
+  useEffect(() => {
+    if (reviewId) {
+      reviewService.getReviewById(reviewId)
+        .then((data) => {
+          if (data) {
+            setReview(data);
+            setFindings(data.findings || []);
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not load live review, using mock fallback:', err.message);
+        });
+    }
+  }, [reviewId]);
 
   const activeFinding = findings[activeFindingIndex] || findings[0];
 
-  const handleAccept = ({ text, tier }) => {
+  const handleAccept = async ({ text, tier }) => {
+    if (reviewId && activeFinding?.id) {
+      try {
+        await reviewService.acceptCorrection(reviewId, {
+          findingId: activeFinding.id,
+          replacementText: text,
+          tier: tier || 'balanced',
+          rationale: `Accepted ${tier || 'balanced'} Intent Lock fix in comparison view.`,
+        });
+      } catch (err) {
+        toastError('Failed to apply correction', err.message);
+        return;
+      }
+    }
+
     success('Intent Lock Revision Saved', `Accepted ${tier} correction: "${text}"`);
     // Advance to next finding or complete
     if (findings.length > 1) {

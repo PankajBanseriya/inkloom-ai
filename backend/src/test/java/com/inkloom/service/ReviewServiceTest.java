@@ -3,6 +3,7 @@ package com.inkloom.service;
 import com.inkloom.dto.request.CorrectionAcceptRequest;
 import com.inkloom.dto.request.ReviewSubmissionRequest;
 import com.inkloom.dto.response.ReviewResponse;
+import com.inkloom.integration.ai.orchestration.ReviewAiOrchestrator;
 import com.inkloom.model.*;
 import com.inkloom.repository.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +20,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +42,8 @@ class ReviewServiceTest {
     private ReviewFeedbackRepository feedbackRepository;
     @Mock
     private AuditEventRepository auditEventRepository;
+    @Mock
+    private ReviewAiOrchestrator reviewAiOrchestrator;
 
     private ReviewService reviewService;
 
@@ -53,7 +57,8 @@ class ReviewServiceTest {
                 claimRepository,
                 sourceRepository,
                 feedbackRepository,
-                auditEventRepository
+                auditEventRepository,
+                reviewAiOrchestrator
         );
     }
 
@@ -62,6 +67,7 @@ class ReviewServiceTest {
     void testSubmitReviewWithProhibitedTerms() {
         String brandId = "brand-123";
         when(workspaceRepository.existsById(brandId)).thenReturn(true);
+        when(reviewAiOrchestrator.isAiEnabled()).thenReturn(false);
 
         BrandGuideline guideline = new BrandGuideline(brandId, "v1.0", "user-1");
         guideline.getProhibitedExpressions().add(new BrandGuideline.ProhibitedTerm(
@@ -95,6 +101,100 @@ class ReviewServiceTest {
         assertTrue(response.getComplianceScore() < 100.0);
         verify(revisionRepository, times(1)).save(any(Revision.class));
         verify(auditEventRepository, times(1)).save(any(AuditEvent.class));
+    }
+
+    @Test
+    @DisplayName("submitReview detects missing mandatory legal disclosures and required phrases")
+    void testSubmitReviewWithRequiredPhrases() {
+        String brandId = "brand-123";
+        when(workspaceRepository.existsById(brandId)).thenReturn(true);
+        when(reviewAiOrchestrator.isAiEnabled()).thenReturn(false);
+
+        BrandGuideline guideline = new BrandGuideline(brandId, "v1.0", "user-1");
+        guideline.getRequiredPhrases().add(new BrandGuideline.RequiredPhrase(
+                "req-1", "Legal Footer", "Results may vary based on deployment configuration.", true
+        ));
+        when(guidelineRepository.findFirstByBrandIdAndStatus(brandId, "ACTIVE")).thenReturn(Optional.of(guideline));
+        when(claimRepository.findByBrandId(brandId)).thenReturn(List.of());
+
+        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> {
+            Review r = inv.getArgument(0);
+            r.setId("rev-888");
+            return r;
+        });
+
+        // Content > 50 characters, missing mandatory disclosure
+        String body = "This is an official announcement introducing our enterprise data acceleration engine to global markets.";
+        ReviewSubmissionRequest request = new ReviewSubmissionRequest(
+                brandId,
+                "Product Announcement",
+                "PRESS_RELEASE",
+                body
+        );
+
+        ReviewResponse response = reviewService.submitReview(request, "author-2");
+
+        assertNotNull(response);
+        assertEquals(1, response.getFindings().size());
+        Finding f = response.getFindings().get(0);
+        assertEquals("REQUIRED_TERMINOLOGY", f.getCategory());
+        assertEquals("WARNING", f.getSeverity());
+        assertEquals("VERIFIED_RULE", f.getEvidenceType());
+        assertTrue(f.getTitle().contains("Results may vary"));
+        verify(revisionRepository, times(1)).save(any(Revision.class));
+    }
+
+    @Test
+    @DisplayName("submitReview merges AI-orchestrated contextual findings when AI is enabled")
+    void testSubmitReviewWithAiOrchestration() {
+        String brandId = "brand-123";
+        when(workspaceRepository.existsById(brandId)).thenReturn(true);
+        when(workspaceRepository.findById(brandId)).thenReturn(Optional.of(new BrandWorkspace("Acme Corp", "acme-corp", "Enterprise tech", "Acme Corp Tech", "owner-1")));
+        when(reviewAiOrchestrator.isAiEnabled()).thenReturn(true);
+
+        BrandGuideline guideline = new BrandGuideline(brandId, "v1.0", "user-1");
+        when(guidelineRepository.findFirstByBrandIdAndStatus(brandId, "ACTIVE")).thenReturn(Optional.of(guideline));
+        when(claimRepository.findByBrandId(brandId)).thenReturn(List.of());
+
+        Finding aiFinding = new Finding(
+                "ai-find-1",
+                "BRAND_TONE",
+                "WARNING",
+                "SUBJECTIVE_SUGGESTION",
+                "Overly Aggressive Sales Tone",
+                "crush the competition effortlessly",
+                "Brand tone calls for measured, collaborative enterprise communication.",
+                "Brand Voice Guidelines v1.0",
+                new SuggestedCorrection("deliver distinct competitive value", "establish clear market differentiation", "outperform legacy infrastructure sustainably", "Align with consultative tone")
+        );
+        aiFinding.setConfidence(0.88);
+
+        when(reviewAiOrchestrator.performAiReview(eq(brandId), eq("Acme Corp"), any(String.class), eq("pending")))
+                .thenReturn(List.of(aiFinding));
+
+        when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> {
+            Review r = inv.getArgument(0);
+            r.setId("rev-777");
+            return r;
+        });
+
+        String body = "Deploy our platform today to crush the competition effortlessly across every data center.";
+        ReviewSubmissionRequest request = new ReviewSubmissionRequest(
+                brandId,
+                "Landing Page Draft",
+                "WEB_PAGE",
+                body
+        );
+
+        ReviewResponse response = reviewService.submitReview(request, "author-3");
+
+        assertNotNull(response);
+        assertEquals(1, response.getFindings().size());
+        Finding recorded = response.getFindings().get(0);
+        assertEquals("BRAND_TONE", recorded.getCategory());
+        assertEquals("crush the competition effortlessly", recorded.getExcerpt());
+        assertEquals(0.88, recorded.getConfidence());
+        assertEquals(95.0, response.getComplianceScore()); // 100 - (1 warning * 5.0)
     }
 
     @Test

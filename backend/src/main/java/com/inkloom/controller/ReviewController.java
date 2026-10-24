@@ -69,7 +69,7 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.ok(reviewService.getSuggestions(reviewId)));
     }
 
-    @PostMapping("/{reviewId}/accept-correction")
+    @PostMapping(value = {"/{reviewId}/accept-correction", "/{reviewId}/corrections/accept"})
     @PreAuthorize("hasAnyRole('CONTENT_CREATOR', 'BRAND_MANAGER', 'ADMIN') and @workspaceSecurity.canAccessReview(#reviewId)")
     public ResponseEntity<ApiResponse<ReviewResponse>> acceptCorrection(
             @PathVariable String reviewId,
@@ -94,7 +94,7 @@ public class ReviewController {
                 .body(ApiResponse.ok("New revision saved successfully", response));
     }
 
-    @GetMapping("/{reviewId}/history")
+    @GetMapping(value = {"/{reviewId}/history", "/{reviewId}/revisions"})
     @PreAuthorize("@workspaceSecurity.canAccessReview(#reviewId)")
     public ResponseEntity<ApiResponse<List<RevisionResponse>>> getRevisionHistory(@PathVariable String reviewId) {
         return ResponseEntity.ok(ApiResponse.ok(reviewService.getRevisionHistory(reviewId)));

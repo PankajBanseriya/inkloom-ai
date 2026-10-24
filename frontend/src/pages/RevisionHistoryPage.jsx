@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PageHeader from '../components/common/PageHeader';
 import Card from '../components/common/Card';
@@ -7,15 +7,35 @@ import StatusBadge from '../components/common/StatusBadge';
 import { useToast } from '../context/ToastContext';
 import { ROUTES } from '../constants/routes';
 import { MOCK_REVIEWS, MOCK_REVISIONS } from '../mock/mockData';
+import reviewService from '../services/reviewService';
 import { ArrowLeft, RotateCcw, FileText } from 'lucide-react';
 
 export default function RevisionHistoryPage() {
   const { reviewId } = useParams();
   const { success } = useToast();
 
-  const review = MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0];
-  const revisions = MOCK_REVISIONS;
-  const [selectedRevision, setSelectedRevision] = useState(revisions[0]);
+  const [review, setReview] = useState(() => MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0]);
+  const [revisions, setRevisions] = useState(MOCK_REVISIONS);
+  const [selectedRevision, setSelectedRevision] = useState(MOCK_REVISIONS[0]);
+
+  useEffect(() => {
+    if (reviewId) {
+      reviewService.getReviewById(reviewId)
+        .then((data) => {
+          if (data) setReview(data);
+        })
+        .catch(() => {});
+
+      reviewService.getRevisionHistory(reviewId)
+        .then((data) => {
+          if (data && data.length > 0) {
+            setRevisions(data);
+            setSelectedRevision(data[0]);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [reviewId]);
 
   const handleRollback = (rev) => {
     success('Revision Activated', `Restored content snapshot from Revision #${rev.revisionNumber}.`);

@@ -1,6 +1,7 @@
 package com.inkloom.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public class ReviewSubmissionRequest {
 
@@ -8,12 +9,14 @@ public class ReviewSubmissionRequest {
     private String brandId;
 
     @NotBlank(message = "Title is required")
+    @Size(max = 200, message = "Title cannot exceed 200 characters")
     private String title;
 
     @NotBlank(message = "Content type is required")
     private String contentType = "Press Release";
 
     @NotBlank(message = "Content body is required")
+    @Size(max = 50000, message = "Content cannot exceed 50,000 characters")
     private String content;
 
     public ReviewSubmissionRequest() {}

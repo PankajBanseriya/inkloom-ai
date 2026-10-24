@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import PageHeader from '../components/common/PageHeader';
 import Card from '../components/common/Card';
@@ -9,14 +9,15 @@ import EvidenceCard from '../features/evidence/EvidenceCard';
 import { useToast } from '../context/ToastContext';
 import { ROUTES } from '../constants/routes';
 import { MOCK_REVIEWS } from '../mock/mockData';
+import reviewService from '../services/reviewService';
 import { ShieldAlert, ArrowLeft, GitCompare, Send } from 'lucide-react';
 
 export default function ReviewFindingsPage() {
   const { reviewId } = useParams();
   const { success, info } = useToast();
 
-  const review = MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0];
-  const [findings, setFindings] = useState(review.findings);
+  const [review, setReview] = useState(() => MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0]);
+  const [findings, setFindings] = useState(review.findings || []);
   const [selectedStrengths, setSelectedStrengths] = useState({
     'find-01': 'balanced',
     'find-02': 'balanced',
@@ -26,6 +27,21 @@ export default function ReviewFindingsPage() {
 
   const [search, setSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState('ALL');
+
+  useEffect(() => {
+    if (reviewId) {
+      reviewService.getReviewById(reviewId)
+        .then((data) => {
+          if (data) {
+            setReview(data);
+            setFindings(data.findings || []);
+          }
+        })
+        .catch((err) => {
+          console.warn('Could not load live review, using mock fallback:', err.message);
+        });
+    }
+  }, [reviewId]);
 
   const handleSelectStrength = (id, str) => {
     setSelectedStrengths((prev) => ({ ...prev, [id]: str }));

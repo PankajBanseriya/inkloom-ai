@@ -161,13 +161,26 @@ public class ReviewAiOrchestrator {
             finding.setStartOffset(aiFinding.getStartIndex() != null ? aiFinding.getStartIndex() : -1);
             finding.setEndOffset(aiFinding.getEndIndex() != null ? aiFinding.getEndIndex() : -1);
             finding.setResolved(false);
+            finding.setConfidence(aiFinding.getConfidence() != null ? aiFinding.getConfidence() : 1.0);
 
             // Connect supporting source ID if present
             if (!aiFinding.getReferencedSourceIds().isEmpty()) {
-                finding.setSupportingSourceId(aiFinding.getReferencedSourceIds().get(0));
-                finding.setSupportingDoc("Approved Source Citation: " + aiFinding.getReferencedSourceIds().get(0));
+                String primarySrc = aiFinding.getReferencedSourceIds().get(0);
+                finding.setSupportingSourceId(primarySrc);
+                finding.setSupportingDoc("Approved Source Citation: " + primarySrc);
             } else if (!aiFinding.getReferencedClaimIds().isEmpty()) {
-                finding.setSupportingDoc("Approved Claim Citation: " + aiFinding.getReferencedClaimIds().get(0));
+                String primaryClaim = aiFinding.getReferencedClaimIds().get(0);
+                finding.setReferencedClaimId(primaryClaim);
+                finding.setSupportingDoc("Approved Claim Citation: " + primaryClaim);
+            } else if ("UNSUPPORTED_CLAIM".equalsIgnoreCase(aiFinding.getCategory())
+                    || "UNAPPROVED_CLAIM".equalsIgnoreCase(aiFinding.getCategory())) {
+                finding.setEvidenceType("UNSUPPORTED_CLAIM");
+                finding.setSupportingDoc("Evidence Not Found in Registered Sources");
+            }
+
+            // Distinguish uncertain findings if confidence is low (< 0.70)
+            if (finding.getConfidence() != null && finding.getConfidence() < 0.70) {
+                finding.setEvidenceType("UNCERTAIN_FINDING");
             }
 
             // Map Suggested Corrections
