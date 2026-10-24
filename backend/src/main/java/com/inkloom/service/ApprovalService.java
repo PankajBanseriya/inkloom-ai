@@ -110,7 +110,8 @@ public class ApprovalService {
                 reviewerUserId != null ? reviewerUserId : "reviewer-default",
                 reviewerName != null ? reviewerName : "Reviewer",
                 rawAction,
-                request.getDecisionNotes()
+                request.getDecisionNotes(),
+                review.getActiveRevisionNumber()
         );
         ReviewDecision savedDecision = decisionRepository.save(decision);
 

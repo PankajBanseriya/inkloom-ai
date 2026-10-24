@@ -82,6 +82,7 @@ class ApprovalServiceTest {
         Review review = new Review("brand-1", "author-1", "Whitepaper", "WHITEPAPER", "Draft body");
         review.setId("rev-100");
         review.setStatus("IN_REVIEW");
+        review.setActiveRevisionNumber(2);
 
         when(reviewRepository.findById("rev-100")).thenReturn(Optional.of(review));
         when(reviewRepository.save(any(Review.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -96,6 +97,7 @@ class ApprovalServiceTest {
 
         assertNotNull(response);
         assertEquals("APPROVE", response.getAction());
+        assertEquals(2, response.getRevisionNumber());
         assertEquals("APPROVED", review.getStatus());
         verify(reviewRepository, times(1)).save(review);
         verify(decisionRepository, times(1)).save(any(ReviewDecision.class));

@@ -11,6 +11,7 @@ public class Finding {
     private String explanation;
     private String supportingDoc;
     private String supportingSourceId;
+    private java.util.List<String> referencedSourceIds = new java.util.ArrayList<>();
     private Integer startOffset;
     private Integer endOffset;
     private SuggestedCorrection suggestedCorrections;
@@ -58,7 +59,17 @@ public class Finding {
     public void setSupportingDoc(String supportingDoc) { this.supportingDoc = supportingDoc; }
 
     public String getSupportingSourceId() { return supportingSourceId; }
-    public void setSupportingSourceId(String supportingSourceId) { this.supportingSourceId = supportingSourceId; }
+    public void setSupportingSourceId(String supportingSourceId) {
+        this.supportingSourceId = supportingSourceId;
+        if (supportingSourceId != null && !referencedSourceIds.contains(supportingSourceId)) {
+            referencedSourceIds.add(supportingSourceId);
+        }
+    }
+
+    public java.util.List<String> getReferencedSourceIds() { return referencedSourceIds; }
+    public void setReferencedSourceIds(java.util.List<String> referencedSourceIds) {
+        this.referencedSourceIds = referencedSourceIds != null ? referencedSourceIds : new java.util.ArrayList<>();
+    }
 
     public Integer getStartOffset() { return startOffset; }
     public void setStartOffset(Integer startOffset) { this.startOffset = startOffset; }

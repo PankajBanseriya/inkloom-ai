@@ -60,8 +60,15 @@ export default function IntentLockPage() {
     }
   };
 
-  const handleReject = () => {
-    info('Correction Rejected', 'Original author wording preserved in document.');
+  const handleReject = async () => {
+    if (reviewId && activeFinding?.id) {
+      try {
+        await reviewService.rejectCorrection(reviewId, activeFinding.id, 'Author preserved original phrasing.');
+      } catch (err) {
+        console.warn('Could not record reject feedback:', err.message);
+      }
+    }
+    info('Correction Rejected', 'Original author wording preserved in document and logged for clarity review.');
     if (findings.length > 1) {
       setFindings((prev) => prev.filter((_, idx) => idx !== activeFindingIndex));
       setActiveFindingIndex(0);
@@ -152,8 +159,12 @@ export default function IntentLockPage() {
           {/* The Multi-Tier Comparison Component */}
           <IntentLockComparison
             originalText={activeFinding.excerpt}
-            corrections={activeFinding.suggestedCorrections}
-            rationale={activeFinding.explanation}
+            corrections={{
+              light: activeFinding.suggestedCorrections?.light || activeFinding.suggestedCorrection?.terse || '',
+              balanced: activeFinding.suggestedCorrections?.balanced || activeFinding.suggestedCorrection?.balanced || '',
+              strong: activeFinding.suggestedCorrections?.strong || activeFinding.suggestedCorrection?.comprehensive || '',
+            }}
+            rationale={activeFinding.suggestedCorrection?.intentRationale || activeFinding.explanation}
             onAccept={handleAccept}
             onReject={handleReject}
           />

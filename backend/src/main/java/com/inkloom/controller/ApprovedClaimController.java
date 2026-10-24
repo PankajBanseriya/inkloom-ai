@@ -4,10 +4,12 @@ import com.inkloom.dto.request.ApprovedClaimRequest;
 import com.inkloom.dto.response.ApiResponse;
 import com.inkloom.dto.response.ApprovedClaimResponse;
 import com.inkloom.service.ApprovedClaimService;
+import com.inkloom.security.UserPrincipal;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -53,5 +55,28 @@ public class ApprovedClaimController {
             @PathVariable String claimId,
             @Valid @RequestBody ApprovedClaimRequest request) {
         return ResponseEntity.ok(ApiResponse.ok("Approved claim updated", claimService.updateClaim(brandId, claimId, request)));
+    }
+
+    @DeleteMapping("/{claimId}")
+    @PreAuthorize("hasAnyRole('BRAND_MANAGER', 'ADMIN') and @workspaceSecurity.canAccessClaim(#claimId)")
+    public ResponseEntity<ApiResponse<Void>> deleteClaim(
+            @PathVariable String brandId,
+            @PathVariable String claimId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        String userId = (principal != null) ? principal.getId() : null;
+        claimService.deleteClaim(brandId, claimId, userId);
+        return ResponseEntity.ok(ApiResponse.ok("Approved claim deleted successfully", null));
+    }
+
+    @PatchMapping("/{claimId}/status")
+    @PreAuthorize("hasAnyRole('BRAND_MANAGER', 'ADMIN') and @workspaceSecurity.canAccessClaim(#claimId)")
+    public ResponseEntity<ApiResponse<ApprovedClaimResponse>> updateClaimStatus(
+            @PathVariable String brandId,
+            @PathVariable String claimId,
+            @RequestParam String status,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        String userId = (principal != null) ? principal.getId() : null;
+        ApprovedClaimResponse response = claimService.updateClaimStatus(brandId, claimId, status, userId);
+        return ResponseEntity.ok(ApiResponse.ok("Claim status updated", response));
     }
 }

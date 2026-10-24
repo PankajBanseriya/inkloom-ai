@@ -81,6 +81,19 @@ public class ReviewController {
         return ResponseEntity.ok(ApiResponse.ok("Correction accepted and non-destructive revision created", response));
     }
 
+    @PostMapping(value = {"/{reviewId}/reject-correction", "/{reviewId}/corrections/reject"})
+    @PreAuthorize("@workspaceSecurity.canAccessReview(#reviewId)")
+    public ResponseEntity<ApiResponse<ReviewResponse>> rejectCorrection(
+            @PathVariable String reviewId,
+            @RequestParam String findingId,
+            @RequestParam(required = false) String reason,
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+        String effectiveUserId = (principal != null) ? principal.getId() : (userId != null ? userId : "user-default");
+        ReviewResponse response = reviewService.rejectCorrection(reviewId, findingId, reason, effectiveUserId);
+        return ResponseEntity.ok(ApiResponse.ok("Correction rejected; original text preserved", response));
+    }
+
     @PostMapping("/{reviewId}/revisions")
     @PreAuthorize("hasAnyRole('CONTENT_CREATOR', 'BRAND_MANAGER', 'ADMIN') and @workspaceSecurity.canAccessReview(#reviewId)")
     public ResponseEntity<ApiResponse<RevisionResponse>> saveRevision(

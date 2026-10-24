@@ -239,12 +239,16 @@ public class ReviewService {
     public ReviewResponse getReviewById(String reviewId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
+        sanitizeFindingEvidence(review);
         return new ReviewResponse(review);
     }
 
     public List<ReviewResponse> getReviewsByBrand(String brandId) {
         return reviewRepository.findByBrandIdOrderByCreatedAtDesc(brandId).stream()
-                .map(ReviewResponse::new)
+                .map(r -> {
+                    sanitizeFindingEvidence(r);
+                    return new ReviewResponse(r);
+                })
                 .collect(Collectors.toList());
     }
 
@@ -257,7 +261,31 @@ public class ReviewService {
     public List<Finding> getFindings(String reviewId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
+        sanitizeFindingEvidence(review);
         return review.getFindings() != null ? review.getFindings() : Collections.emptyList();
+    }
+
+    private void sanitizeFindingEvidence(Review review) {
+        if (review.getFindings() == null || review.getFindings().isEmpty() || sourceRepository == null) return;
+        List<String> authorizedSourceIds = sourceRepository.findByBrandId(review.getBrandId()).stream()
+                .map(ApprovedSource::getId)
+                .collect(Collectors.toList());
+
+        for (Finding f : review.getFindings()) {
+            if (f.getSupportingSourceId() != null && !authorizedSourceIds.contains(f.getSupportingSourceId())) {
+                f.setSupportingSourceId(null);
+            }
+            if (f.getReferencedSourceIds() != null && !f.getReferencedSourceIds().isEmpty()) {
+                List<String> validIds = f.getReferencedSourceIds().stream()
+                        .filter(authorizedSourceIds::contains)
+                        .collect(Collectors.toList());
+                f.setReferencedSourceIds(validIds);
+                if (validIds.isEmpty() && "VERIFIED_RULE".equalsIgnoreCase(f.getEvidenceType()) && f.getCategory() != null && f.getCategory().contains("CLAIM")) {
+                    f.setEvidenceType("UNSUPPORTED_CLAIM");
+                    f.setSupportingDoc("Evidence Not Found in Registered Sources");
+                }
+            }
+        }
     }
 
     public List<SuggestedCorrection> getSuggestions(String reviewId) {
@@ -285,7 +313,8 @@ public class ReviewService {
         targetFinding.setResolved(true);
         review.getFindings().remove(targetFinding);
 
-        int newRevisionNum = review.getActiveRevisionNumber() + 1;
+        int sourceRevisionNum = review.getActiveRevisionNumber();
+        int newRevisionNum = sourceRevisionNum + 1;
         review.setActiveRevisionNumber(newRevisionNum);
 
         // Recalculate score
@@ -297,13 +326,14 @@ public class ReviewService {
 
         Review savedReview = reviewRepository.save(review);
 
-        // Save Revision
+        // Save Revision with source/parent revision lineage
         Revision revision = new Revision(
                 reviewId,
                 newRevisionNum,
                 updated,
                 userId,
-                "Applied " + request.getTier() + " Intent Lock fix for: \"" + targetFinding.getExcerpt() + "\""
+                "Applied " + request.getTier() + " Intent Lock fix for: \"" + targetFinding.getExcerpt() + "\"",
+                sourceRevisionNum
         );
         revision.getAcceptedFindingIds().add(targetFinding.getId());
         revisionRepository.save(revision);
@@ -330,12 +360,44 @@ public class ReviewService {
         return new ReviewResponse(savedReview);
     }
 
+    public ReviewResponse rejectCorrection(String reviewId, String findingId, String reason, String userId) {
+        Review review = reviewRepository.findById(reviewId)
+                .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
+
+        Finding targetFinding = review.getFindings().stream()
+                .filter(f -> f.getId().equals(findingId))
+                .findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException("Finding", "id", findingId));
+
+        // Track feedback for Clarity Heatmap intelligence (rejection/friction point)
+        feedbackRepository.save(new ReviewFeedback(
+                review.getBrandId(),
+                reviewId,
+                targetFinding.getId(),
+                targetFinding.getCategory(),
+                "REJECTED",
+                reason != null ? reason : "Author rejected suggested correction; original wording preserved."
+        ));
+
+        auditEventRepository.save(new AuditEvent(
+                review.getBrandId(),
+                userId,
+                "CORRECTION_REJECTED",
+                "Review",
+                reviewId,
+                "Rejected correction for finding: " + targetFinding.getTitle() + (reason != null ? " (" + reason + ")" : "")
+        ));
+
+        return new ReviewResponse(review);
+    }
+
     public RevisionResponse saveRevision(String reviewId, RevisionCreateRequest request, String userId) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
 
         review.setCurrentContent(request.getContent());
-        int newRevisionNum = review.getActiveRevisionNumber() + 1;
+        int sourceRevNum = review.getActiveRevisionNumber();
+        int newRevisionNum = sourceRevNum + 1;
         review.setActiveRevisionNumber(newRevisionNum);
         review.setUpdatedAt(Instant.now());
         reviewRepository.save(review);
@@ -345,7 +407,8 @@ public class ReviewService {
                 newRevisionNum,
                 request.getContent(),
                 userId,
-                request.getChangeSummary()
+                request.getChangeSummary(),
+                sourceRevNum
         );
         Revision savedRevision = revisionRepository.save(revision);
 

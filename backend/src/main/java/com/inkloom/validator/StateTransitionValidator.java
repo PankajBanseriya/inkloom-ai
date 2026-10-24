@@ -10,11 +10,12 @@ import java.util.Set;
 public class StateTransitionValidator {
 
     private static final Map<String, Set<String>> VALID_TRANSITIONS = Map.of(
-            "DRAFT", Set.of("IN_REVIEW"),
+            "DRAFT", Set.of("SUBMITTED", "IN_REVIEW"),
+            "SUBMITTED", Set.of("IN_REVIEW", "CHANGES_REQUESTED", "REJECTED"),
             "IN_REVIEW", Set.of("IN_REVIEW", "CHANGES_REQUESTED", "APPROVED", "REJECTED"),
-            "CHANGES_REQUESTED", Set.of("IN_REVIEW", "REJECTED"),
-            "APPROVED", Set.of("IN_REVIEW"), // Re-opens on new revision
-            "REJECTED", Set.of("IN_REVIEW")  // Re-opens on new revision
+            "CHANGES_REQUESTED", Set.of("SUBMITTED", "IN_REVIEW", "REJECTED"),
+            "APPROVED", Set.of("SUBMITTED", "IN_REVIEW"), // Re-opens on new revision
+            "REJECTED", Set.of("SUBMITTED", "IN_REVIEW")  // Re-opens on new revision
     );
 
     public void validateTransition(String currentStatus, String targetStatus) {

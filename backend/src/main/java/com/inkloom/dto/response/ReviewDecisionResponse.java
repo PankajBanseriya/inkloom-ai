@@ -11,6 +11,7 @@ public class ReviewDecisionResponse {
     private String reviewerName;
     private String action;
     private String decisionNotes;
+    private Integer revisionNumber;
     private Instant timestamp;
 
     public ReviewDecisionResponse() {}
@@ -22,6 +23,7 @@ public class ReviewDecisionResponse {
         this.reviewerName = decision.getReviewerName();
         this.action = decision.getAction();
         this.decisionNotes = decision.getDecisionNotes();
+        this.revisionNumber = decision.getRevisionNumber();
         this.timestamp = decision.getTimestamp();
     }
 
@@ -37,6 +39,8 @@ public class ReviewDecisionResponse {
     public void setAction(String action) { this.action = action; }
     public String getDecisionNotes() { return decisionNotes; }
     public void setDecisionNotes(String decisionNotes) { this.decisionNotes = decisionNotes; }
+    public Integer getRevisionNumber() { return revisionNumber; }
+    public void setRevisionNumber(Integer revisionNumber) { this.revisionNumber = revisionNumber; }
     public Instant getTimestamp() { return timestamp; }
     public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
 }

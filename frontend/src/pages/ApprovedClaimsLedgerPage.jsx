@@ -1,23 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import FilterBar from '../components/common/FilterBar';
 import StatusBadge from '../components/common/StatusBadge';
+import Badge from '../components/common/Badge';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import Input from '../components/common/Input';
 import FormField from '../components/common/FormField';
+import LoadingSpinner from '../components/feedback/LoadingSpinner';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { MOCK_APPROVED_CLAIMS } from '../mock/mockData';
-import { Plus, CheckCircle2, AlertTriangle } from 'lucide-react';
+import claimsService from '../services/claimsService';
+import { Plus, CheckCircle2, AlertTriangle, Trash2, Clock, RefreshCw } from 'lucide-react';
 
 export default function ApprovedClaimsLedgerPage() {
   const { activeBrand, user } = useAuth();
-  const { success } = useToast();
+  const { success, error: toastError, info } = useToast();
   const canManageClaims = user?.role === 'BRAND_MANAGER' || user?.role === 'ADMIN';
 
   const [claims, setClaims] = useState(MOCK_APPROVED_CLAIMS);
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,38 +32,117 @@ export default function ApprovedClaimsLedgerPage() {
   const [newOwner, setNewOwner] = useState('');
   const [newExpiry, setNewExpiry] = useState('');
 
+  const fetchClaims = useCallback(() => {
+    if (!activeBrand?.id) return;
+    setLoading(true);
+    claimsService.getClaims(activeBrand.id)
+      .then((data) => {
+        if (data && data.length > 0) {
+          setClaims(data);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load claims from API, using cached data:', err.message);
+      })
+      .finally(() => setLoading(false));
+  }, [activeBrand?.id]);
+
+  useEffect(() => {
+    fetchClaims();
+  }, [fetchClaims]);
+
   const filtered = claims.filter((c) => {
+    const text = c.claimText || '';
+    const source = c.supportingSource || '';
+    const scope = c.scope || '';
     const matchesSearch =
-      c.claimText.toLowerCase().includes(search.toLowerCase()) ||
-      c.supportingSource.toLowerCase().includes(search.toLowerCase()) ||
-      c.scope.toLowerCase().includes(search.toLowerCase());
+      text.toLowerCase().includes(search.toLowerCase()) ||
+      source.toLowerCase().includes(search.toLowerCase()) ||
+      scope.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || c.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const handleAddClaim = (e) => {
+  const handleAddClaim = async (e) => {
     e.preventDefault();
     if (!newClaimText.trim()) return;
 
-    const claimObj = {
-      id: `clm-${Date.now().toString(36)}`,
-      claimText: newClaimText,
-      supportingSource: newSource || 'General Company Specifications',
-      scope: newScope || 'All standard enterprise communications.',
-      status: 'APPROVED',
-      owner: newOwner || 'Product Marketing',
-      reviewDate: new Date().toISOString().split('T')[0],
-      expiryDate: newExpiry || '2027-10-24',
+    const payload = {
+      claimText: newClaimText.trim(),
+      supportingSource: newSource.trim() || 'General Enterprise Specifications',
+      scope: newScope.trim() || 'All standard enterprise communications.',
+      owner: newOwner.trim() || user?.name || 'Product Marketing',
+      expiryDate: newExpiry ? new Date(newExpiry).toISOString() : new Date(Date.now() + 365 * 86400000).toISOString(),
     };
 
-    setClaims((prev) => [claimObj, ...prev]);
+    if (activeBrand?.id) {
+      try {
+        const saved = await claimsService.createClaim(activeBrand.id, payload);
+        if (saved) {
+          setClaims((prev) => [saved, ...prev]);
+        }
+      } catch (err) {
+        toastError('Failed to register claim', err.message);
+        return;
+      }
+    } else {
+      const claimObj = {
+        id: `clm-${Date.now().toString(36)}`,
+        ...payload,
+        status: 'APPROVED',
+        reviewDate: new Date().toISOString(),
+      };
+      setClaims((prev) => [claimObj, ...prev]);
+    }
+
     setIsModalOpen(false);
     setNewClaimText('');
     setNewSource('');
     setNewScope('');
     setNewOwner('');
     setNewExpiry('');
-    success('Approved Claim Recorded', `Claim "${claimObj.id}" added to the central governance ledger.`);
+    success('Approved Claim Recorded', 'Claim registered in the central governance ledger.');
+  };
+
+  const handleDeleteClaim = async (claimId) => {
+    if (!canManageClaims) {
+      toastError('Access Denied', 'Only Brand Managers and Admins can delete claims.');
+      return;
+    }
+
+    if (activeBrand?.id) {
+      try {
+        await claimsService.deleteClaim(activeBrand.id, claimId);
+      } catch (err) {
+        toastError('Deletion Failed', err.message);
+        return;
+      }
+    }
+    setClaims((prev) => prev.filter((c) => c.id !== claimId));
+    info('Claim Removed', 'Approved claim record deleted from ledger.');
+  };
+
+  const handleToggleStatus = async (claim) => {
+    if (!canManageClaims) {
+      toastError('Access Denied', 'Only Brand Managers and Admins can modify claim statuses.');
+      return;
+    }
+
+    const nextStatus = claim.status === 'APPROVED' ? 'EXPIRED' : 'APPROVED';
+    if (activeBrand?.id && claim.id) {
+      try {
+        const updated = await claimsService.updateClaimStatus(activeBrand.id, claim.id, nextStatus);
+        setClaims((prev) => prev.map((c) => (c.id === claim.id ? updated : c)));
+      } catch (err) {
+        toastError('Status Update Failed', err.message);
+        return;
+      }
+    } else {
+      setClaims((prev) =>
+        prev.map((c) => (c.id === claim.id ? { ...c, status: nextStatus, isExpired: nextStatus === 'EXPIRED' } : c))
+      );
+    }
+    success('Claim Status Updated', `Status changed to ${nextStatus}.`);
   };
 
   const columns = [
@@ -71,10 +154,20 @@ export default function ApprovedClaimsLedgerPage() {
           <span className="font-semibold text-ink-900 leading-snug">
             &ldquo;{val}&rdquo;
           </span>
-          <div className="text-[11px] text-ink-500 mt-1 flex items-center space-x-1.5">
+          <div className="text-[11px] text-ink-500 mt-1 flex items-center space-x-1.5 flex-wrap gap-y-1">
             <span className="font-mono text-[10px] text-ink-400">{row.id}</span>
             <span>•</span>
-            <span className="text-brand-600 font-medium">{row.supportingSource}</span>
+            <span className="text-brand-600 font-medium">{row.supportingSource || 'Missing citation'}</span>
+            {row.isEvidenceMissing && (
+              <Badge variant="warning" size="sm">
+                No Verified Source
+              </Badge>
+            )}
+            {row.isExpired && (
+              <Badge variant="danger" size="sm">
+                Expired
+              </Badge>
+            )}
           </div>
         </div>
       ),
@@ -94,36 +187,80 @@ export default function ApprovedClaimsLedgerPage() {
     {
       key: 'owner',
       header: 'Claim Owner',
-      render: (val) => <span className="font-medium text-ink-800">{val}</span>,
+      render: (val) => <span className="font-medium text-ink-800 text-xs">{val || 'Unassigned'}</span>,
     },
     {
       key: 'dates',
       header: 'Review & Expiration',
-      render: (_, row) => (
-        <div className="text-[11px] text-ink-500">
-          <div>Reviewed: {row.reviewDate}</div>
-          <div className={row.status === 'EXPIRED' ? 'text-rose-600 font-semibold' : 'text-ink-600'}>
-            Expires: {row.expiryDate}
+      render: (_, row) => {
+        const reviewDateStr = row.reviewDate ? String(row.reviewDate).split('T')[0] : 'N/A';
+        const expiryDateStr = row.expiryDate ? String(row.expiryDate).split('T')[0] : 'N/A';
+        const isExp = row.isExpired || row.status === 'EXPIRED';
+
+        return (
+          <div className="text-[11px] text-ink-500">
+            <div>Reviewed: {reviewDateStr}</div>
+            <div className={isExp ? 'text-rose-600 font-semibold' : 'text-ink-600'}>
+              Expires: {expiryDateStr}
+            </div>
           </div>
-        </div>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      render: (_, row) => (
+        canManageClaims ? (
+          <div className="flex items-center space-x-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleToggleStatus(row)}
+              className="text-[11px] px-2 py-1 h-7"
+              title={row.status === 'APPROVED' ? 'Mark claim as expired' : 'Reactivate claim'}
+            >
+              <Clock className="w-3 h-3 mr-1" />
+              {row.status === 'APPROVED' ? 'Expire' : 'Activate'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleDeleteClaim(row.id)}
+              className="text-[11px] px-2 py-1 h-7 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+              title="Delete claim from ledger"
+            >
+              <Trash2 className="w-3 h-3" />
+            </Button>
+          </div>
+        ) : (
+          <span className="text-[11px] text-ink-400 italic">View only</span>
+        )
       ),
     },
   ];
 
-  const expiredCount = claims.filter((c) => c.status === 'EXPIRED').length;
+  const expiredCount = claims.filter((c) => c.status === 'EXPIRED' || c.isExpired).length;
+  const missingEvidenceCount = claims.filter((c) => c.isEvidenceMissing).length;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`${activeBrand?.name || 'Acme'} Approved Claims Ledger`}
+        title={`${activeBrand?.name || 'Workspace'} Approved Claims Ledger`}
         description="Centralized organization ledger of approved marketing and product claims. Content referencing unapproved or expired claims is automatically flagged."
         actions={
-          canManageClaims ? (
-            <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
-              <Plus className="w-4 h-4 mr-1.5" />
-              Register Approved Claim
+          <div className="flex items-center space-x-2">
+            <Button size="sm" variant="outline" onClick={fetchClaims}>
+              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
+              Sync Ledger
             </Button>
-          ) : null
+            {canManageClaims && (
+              <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
+                <Plus className="w-4 h-4 mr-1.5" />
+                Register Approved Claim
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -135,13 +272,16 @@ export default function ApprovedClaimsLedgerPage() {
         </div>
       )}
 
-      {/* Advisory Banner */}
+      {/* Advisory Banners */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="p-4 bg-emerald-50/70 rounded-xl border border-emerald-200 flex items-center space-x-3 text-xs text-emerald-950">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
           <div>
             <div className="font-bold">Human Verified Claims Only</div>
-            <p className="text-emerald-800 mt-0.5">AI engines are prohibited from independently validating claims without registered evidence.</p>
+            <p className="text-emerald-800 mt-0.5">
+              AI engines are prohibited from independently validating claims without registered evidence.
+              {missingEvidenceCount > 0 && ` (${missingEvidenceCount} claims missing evidence)`}
+            </p>
           </div>
         </div>
 
@@ -176,11 +316,17 @@ export default function ApprovedClaimsLedgerPage() {
         }}
       />
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        keyField="id"
-      />
+      {loading ? (
+        <div className="py-12 flex justify-center">
+          <LoadingSpinner label="Loading claims ledger..." />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={filtered}
+          keyField="id"
+        />
+      )}
 
       {/* Register Claim Modal */}
       <Modal

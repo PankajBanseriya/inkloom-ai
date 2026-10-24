@@ -18,6 +18,7 @@ public class Revision {
     private String reviewId;
 
     private int revisionNumber;
+    private Integer sourceRevisionNumber;
     private String content;
     private String authorUserId;
     private String changeSummary;
@@ -28,11 +29,16 @@ public class Revision {
     public Revision() {}
 
     public Revision(String reviewId, int revisionNumber, String content, String authorUserId, String changeSummary) {
+        this(reviewId, revisionNumber, content, authorUserId, changeSummary, revisionNumber > 1 ? revisionNumber - 1 : null);
+    }
+
+    public Revision(String reviewId, int revisionNumber, String content, String authorUserId, String changeSummary, Integer sourceRevisionNumber) {
         this.reviewId = reviewId;
         this.revisionNumber = revisionNumber;
         this.content = content;
         this.authorUserId = authorUserId;
         this.changeSummary = changeSummary;
+        this.sourceRevisionNumber = sourceRevisionNumber;
         this.createdAt = Instant.now();
     }
 
@@ -42,6 +48,8 @@ public class Revision {
     public void setReviewId(String reviewId) { this.reviewId = reviewId; }
     public int getRevisionNumber() { return revisionNumber; }
     public void setRevisionNumber(int revisionNumber) { this.revisionNumber = revisionNumber; }
+    public Integer getSourceRevisionNumber() { return sourceRevisionNumber; }
+    public void setSourceRevisionNumber(Integer sourceRevisionNumber) { this.sourceRevisionNumber = sourceRevisionNumber; }
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
     public String getAuthorUserId() { return authorUserId; }

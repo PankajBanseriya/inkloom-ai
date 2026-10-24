@@ -1,5 +1,8 @@
 package com.inkloom.dto.response;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class WorkspaceAnalyticsResponse {
@@ -11,7 +14,12 @@ public class WorkspaceAnalyticsResponse {
     private long changesRequestedReviews;
     private long issuesIdentified;
     private double avgComplianceScore;
-    private Map<String, Long> categoryBreakdown;
+    private Map<String, Long> categoryBreakdown = new HashMap<>();
+    private boolean hasSufficientData;
+    private List<CategoryHeatmapItemDto> heatmapMatrix = new ArrayList<>();
+    private int ambiguityIndex;
+    private String mostViolatedCategory;
+    private Map<String, String> metricExplanations = new HashMap<>();
 
     public WorkspaceAnalyticsResponse() {}
 
@@ -26,6 +34,7 @@ public class WorkspaceAnalyticsResponse {
         this.issuesIdentified = issuesIdentified;
         this.avgComplianceScore = avgComplianceScore;
         this.categoryBreakdown = categoryBreakdown;
+        this.hasSufficientData = totalReviews > 0 || issuesIdentified > 0;
     }
 
     public String getBrandId() { return brandId; }
@@ -44,4 +53,15 @@ public class WorkspaceAnalyticsResponse {
     public void setAvgComplianceScore(double avgComplianceScore) { this.avgComplianceScore = avgComplianceScore; }
     public Map<String, Long> getCategoryBreakdown() { return categoryBreakdown; }
     public void setCategoryBreakdown(Map<String, Long> categoryBreakdown) { this.categoryBreakdown = categoryBreakdown; }
+
+    public boolean isHasSufficientData() { return hasSufficientData; }
+    public void setHasSufficientData(boolean hasSufficientData) { this.hasSufficientData = hasSufficientData; }
+    public List<CategoryHeatmapItemDto> getHeatmapMatrix() { return heatmapMatrix; }
+    public void setHeatmapMatrix(List<CategoryHeatmapItemDto> heatmapMatrix) { this.heatmapMatrix = heatmapMatrix; }
+    public int getAmbiguityIndex() { return ambiguityIndex; }
+    public void setAmbiguityIndex(int ambiguityIndex) { this.ambiguityIndex = ambiguityIndex; }
+    public String getMostViolatedCategory() { return mostViolatedCategory; }
+    public void setMostViolatedCategory(String mostViolatedCategory) { this.mostViolatedCategory = mostViolatedCategory; }
+    public Map<String, String> getMetricExplanations() { return metricExplanations; }
+    public void setMetricExplanations(Map<String, String> metricExplanations) { this.metricExplanations = metricExplanations; }
 }

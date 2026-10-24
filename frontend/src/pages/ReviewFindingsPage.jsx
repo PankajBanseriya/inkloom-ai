@@ -14,7 +14,7 @@ import { ShieldAlert, ArrowLeft, GitCompare, Send } from 'lucide-react';
 
 export default function ReviewFindingsPage() {
   const { reviewId } = useParams();
-  const { success, info } = useToast();
+  const { success, info, error: toastError } = useToast();
 
   const [review, setReview] = useState(() => MOCK_REVIEWS.find((r) => r.id === reviewId) || MOCK_REVIEWS[0]);
   const [findings, setFindings] = useState(review.findings || []);
@@ -47,14 +47,35 @@ export default function ReviewFindingsPage() {
     setSelectedStrengths((prev) => ({ ...prev, [id]: str }));
   };
 
-  const handleAccept = (findingId, replacement) => {
+  const handleAccept = async (findingId, replacement) => {
+    const tier = selectedStrengths[findingId] || 'balanced';
+    if (reviewId) {
+      try {
+        await reviewService.acceptCorrection(reviewId, {
+          findingId,
+          replacementText: replacement,
+          tier,
+          rationale: `Accepted ${tier} Intent Lock fix from Evidence Card.`,
+        });
+      } catch (err) {
+        toastError('Failed to apply correction', err.message);
+        return;
+      }
+    }
     setFindings((prev) => prev.filter((f) => f.id !== findingId));
-    success('Suggestion Accepted', `Applied fix: "${replacement}"`);
+    success('Suggestion Accepted', `Applied ${tier} fix: "${replacement}"`);
   };
 
-  const handleReject = (findingId) => {
+  const handleReject = async (findingId) => {
+    if (reviewId) {
+      try {
+        await reviewService.rejectCorrection(reviewId, findingId, 'Author dismissed suggestion in Evidence view.');
+      } catch (err) {
+        console.warn('Could not record reject feedback:', err.message);
+      }
+    }
     setFindings((prev) => prev.filter((f) => f.id !== findingId));
-    info('Finding Dismissed', `Dismissed finding ${findingId}`);
+    info('Finding Dismissed', `Preserved author wording for finding ${findingId}`);
   };
 
   const filtered = findings.filter((f) => {

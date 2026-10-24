@@ -15,6 +15,9 @@ public class ApprovedClaimResponse {
     private String owner;
     private Instant reviewDate;
     private Instant expiryDate;
+    private boolean isExpired;
+    private boolean isEvidenceMissing;
+    private String validationNotes;
 
     public ApprovedClaimResponse() {}
 
@@ -29,6 +32,24 @@ public class ApprovedClaimResponse {
         this.owner = claim.getOwner();
         this.reviewDate = claim.getReviewDate();
         this.expiryDate = claim.getExpiryDate();
+
+        boolean expired = "EXPIRED".equalsIgnoreCase(claim.getStatus())
+                || (claim.getExpiryDate() != null && claim.getExpiryDate().isBefore(Instant.now()));
+        this.isExpired = expired;
+
+        boolean missing = (claim.getSupportingSource() == null || claim.getSupportingSource().trim().isEmpty())
+                && (claim.getSupportingSourceId() == null || claim.getSupportingSourceId().trim().isEmpty());
+        this.isEvidenceMissing = missing;
+
+        if (expired && missing) {
+            this.validationNotes = "Claim has expired and has no supporting source citations.";
+        } else if (expired) {
+            this.validationNotes = "Claim benchmark has passed its expiry date. Requires re-certification.";
+        } else if (missing) {
+            this.validationNotes = "Missing evidence source document. Claim cannot be substantiated.";
+        } else {
+            this.validationNotes = "Verified against active approved source records.";
+        }
     }
 
     public String getId() { return id; }
@@ -51,4 +72,10 @@ public class ApprovedClaimResponse {
     public void setReviewDate(Instant reviewDate) { this.reviewDate = reviewDate; }
     public Instant getExpiryDate() { return expiryDate; }
     public void setExpiryDate(Instant expiryDate) { this.expiryDate = expiryDate; }
+    public boolean isExpired() { return isExpired; }
+    public void setExpired(boolean expired) { isExpired = expired; }
+    public boolean isEvidenceMissing() { return isEvidenceMissing; }
+    public void setEvidenceMissing(boolean evidenceMissing) { isEvidenceMissing = evidenceMissing; }
+    public String getValidationNotes() { return validationNotes; }
+    public void setValidationNotes(String validationNotes) { this.validationNotes = validationNotes; }
 }

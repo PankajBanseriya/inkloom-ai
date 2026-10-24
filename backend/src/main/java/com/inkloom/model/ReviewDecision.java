@@ -19,16 +19,22 @@ public class ReviewDecision {
     private String reviewerName;
     private String action; // APPROVE, REJECT, REQUEST_CHANGES
     private String decisionNotes;
+    private Integer revisionNumber;
     private Instant timestamp = Instant.now();
 
     public ReviewDecision() {}
 
     public ReviewDecision(String reviewId, String reviewerUserId, String reviewerName, String action, String decisionNotes) {
+        this(reviewId, reviewerUserId, reviewerName, action, decisionNotes, null);
+    }
+
+    public ReviewDecision(String reviewId, String reviewerUserId, String reviewerName, String action, String decisionNotes, Integer revisionNumber) {
         this.reviewId = reviewId;
         this.reviewerUserId = reviewerUserId;
         this.reviewerName = reviewerName;
         this.action = action;
         this.decisionNotes = decisionNotes;
+        this.revisionNumber = revisionNumber;
         this.timestamp = Instant.now();
     }
 
@@ -44,6 +50,8 @@ public class ReviewDecision {
     public void setAction(String action) { this.action = action; }
     public String getDecisionNotes() { return decisionNotes; }
     public void setDecisionNotes(String decisionNotes) { this.decisionNotes = decisionNotes; }
+    public Integer getRevisionNumber() { return revisionNumber; }
+    public void setRevisionNumber(Integer revisionNumber) { this.revisionNumber = revisionNumber; }
     public Instant getTimestamp() { return timestamp; }
     public void setTimestamp(Instant timestamp) { this.timestamp = timestamp; }
 }

@@ -58,6 +58,19 @@ export const reviewService = {
   },
 
   /**
+   * Rejects an Intent Lock correction; records friction feedback and preserves author phrasing.
+   * @param {string} reviewId
+   * @param {string} findingId
+   * @param {string} reason
+   */
+  async rejectCorrection(reviewId, findingId, reason = '') {
+    const response = await apiClient.post(
+      `/reviews/${encodeURIComponent(reviewId)}/reject-correction?findingId=${encodeURIComponent(findingId)}&reason=${encodeURIComponent(reason)}`
+    );
+    return response.data;
+  },
+
+  /**
    * Manually creates a new revision version.
    * @param {string} reviewId
    * @param {{ updatedContent: string, changeSummary: string }} payload

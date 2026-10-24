@@ -83,7 +83,54 @@ public class ApprovedClaimService {
             claim.setExpiryDate(request.getExpiryDate());
         }
         claim.setUpdatedAt(Instant.now());
+        ApprovedClaim saved = claimRepository.save(claim);
 
-        return new ApprovedClaimResponse(claimRepository.save(claim));
+        auditEventRepository.save(new AuditEvent(
+                brandId,
+                null,
+                "CLAIM_UPDATED",
+                "ApprovedClaim",
+                saved.getId(),
+                "Updated claim: " + saved.getClaimText()
+        ));
+
+        return new ApprovedClaimResponse(saved);
+    }
+
+    public ApprovedClaimResponse updateClaimStatus(String brandId, String claimId, String status, String userId) {
+        ApprovedClaim claim = claimRepository.findById(claimId)
+                .orElseThrow(() -> new ResourceNotFoundException("ApprovedClaim", "id", claimId));
+
+        String oldStatus = claim.getStatus();
+        claim.setStatus(status.toUpperCase().trim());
+        claim.setUpdatedAt(Instant.now());
+        ApprovedClaim saved = claimRepository.save(claim);
+
+        auditEventRepository.save(new AuditEvent(
+                brandId,
+                userId,
+                "CLAIM_STATUS_UPDATED",
+                "ApprovedClaim",
+                saved.getId(),
+                "Status changed from " + oldStatus + " to " + saved.getStatus()
+        ));
+
+        return new ApprovedClaimResponse(saved);
+    }
+
+    public void deleteClaim(String brandId, String claimId, String userId) {
+        ApprovedClaim claim = claimRepository.findById(claimId)
+                .orElseThrow(() -> new ResourceNotFoundException("ApprovedClaim", "id", claimId));
+
+        claimRepository.delete(claim);
+
+        auditEventRepository.save(new AuditEvent(
+                brandId,
+                userId,
+                "CLAIM_DELETED",
+                "ApprovedClaim",
+                claimId,
+                "Deleted claim: " + claim.getClaimText()
+        ));
     }
 }

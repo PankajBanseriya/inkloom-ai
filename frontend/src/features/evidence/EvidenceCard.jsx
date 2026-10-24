@@ -1,7 +1,8 @@
 import Card from '../../components/common/Card';
 import StatusBadge from '../../components/common/StatusBadge';
+import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
-import { ShieldAlert, BookOpen, Sparkles, Check, X, Edit3, AlertCircle } from 'lucide-react';
+import { ShieldAlert, BookOpen, Sparkles, Check, X, Edit3, AlertCircle, HelpCircle } from 'lucide-react';
 
 export default function EvidenceCard({
   finding,
@@ -14,7 +15,18 @@ export default function EvidenceCard({
 }) {
   if (!finding) return null;
 
-  const currentSuggestion = finding.suggestedCorrections?.[selectedStrength] || '';
+  const correctionsMap = {
+    light: finding.suggestedCorrections?.light || finding.suggestedCorrection?.terse || '',
+    balanced: finding.suggestedCorrections?.balanced || finding.suggestedCorrection?.balanced || '',
+    strong: finding.suggestedCorrections?.strong || finding.suggestedCorrection?.comprehensive || '',
+  };
+
+  const hasSuggestions = Boolean(correctionsMap.light || correctionsMap.balanced || correctionsMap.strong);
+  const currentSuggestion = correctionsMap[selectedStrength] || correctionsMap.balanced || correctionsMap.light || '';
+  const intentRationale = finding.suggestedCorrection?.intentRationale;
+
+  const confidencePct = finding.confidence != null ? Math.round(finding.confidence * 100) : null;
+  const isUncertain = (confidencePct != null && confidencePct < 70) || finding.evidenceType === 'UNCERTAIN_FINDING';
 
   return (
     <Card className={`border-l-4 ${
@@ -29,12 +41,24 @@ export default function EvidenceCard({
               {finding.category}
             </span>
             <span>•</span>
-            <span className="text-xs text-ink-500">{finding.id}</span>
+            <span className="text-xs text-ink-500 font-mono">{finding.id}</span>
           </div>
           <h3 className="text-sm font-bold text-ink-900 mt-0.5">{finding.title}</h3>
         </div>
 
         <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+          {confidencePct != null && (
+            isUncertain ? (
+              <Badge variant="warning" size="sm" className="flex items-center space-x-1">
+                <HelpCircle className="w-3 h-3 mr-0.5" />
+                <span>Uncertain ({confidencePct}%)</span>
+              </Badge>
+            ) : (
+              <span className="text-[10px] font-mono text-ink-600 bg-ink-100 px-2 py-0.5 rounded border border-ink-200">
+                {confidencePct}% AI confidence
+              </span>
+            )
+          )}
           <StatusBadge status={finding.severity} size="sm" />
           <StatusBadge status={finding.evidenceType} size="sm" />
         </div>
@@ -65,12 +89,24 @@ export default function EvidenceCard({
       <div className="mt-3 p-2.5 bg-ink-50 rounded-lg border border-ink-200 flex items-start space-x-2.5">
         <BookOpen className="w-4 h-4 text-ink-500 flex-shrink-0 mt-0.5" />
         <div className="flex-1">
-          <div className="text-[10px] font-bold uppercase tracking-wider text-ink-600">
-            Supporting Evidence & Citation:
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-ink-600">
+              Supporting Evidence & Citation:
+            </span>
+            {finding.supportingSourceId && (
+              <span className="text-[10px] font-mono text-ink-500 bg-ink-200/70 px-1.5 py-0.5 rounded">
+                Ref ID: {finding.supportingSourceId}
+              </span>
+            )}
           </div>
           <div className="text-xs font-medium text-ink-800 mt-0.5">
             {finding.supportingDoc || 'No approved reference document matches this statement.'}
           </div>
+          {finding.sourceSection && (
+            <div className="text-[11px] text-ink-500 mt-0.5 font-medium">
+              Section: {finding.sourceSection}
+            </div>
+          )}
           {finding.evidenceType === 'UNSUPPORTED_CLAIM' && (
             <div className="mt-1 flex items-center text-[11px] text-rose-700 font-medium">
               <AlertCircle className="w-3 h-3 mr-1 text-rose-600" />
@@ -81,7 +117,7 @@ export default function EvidenceCard({
       </div>
 
       {/* Suggested Fix (Intent Lock Multi-Tier) */}
-      {finding.suggestedCorrections && (
+      {hasSuggestions && (
         <div className="mt-4 pt-3 border-t border-ink-100">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[11px] font-bold uppercase text-brand-700 tracking-wider flex items-center">
@@ -99,7 +135,7 @@ export default function EvidenceCard({
                     onClick={() => onSelectStrength(finding.id, str)}
                     className={`px-2 py-0.5 rounded capitalize font-medium transition-all ${
                       selectedStrength === str
-                        ? 'bg-white text-brand-700 shadow-xs'
+                        ? 'bg-white text-brand-700 shadow-xs font-bold'
                         : 'text-ink-600 hover:text-ink-900'
                     }`}
                   >
@@ -113,6 +149,13 @@ export default function EvidenceCard({
           <div className="p-2.5 bg-brand-50/60 border border-brand-200 rounded-lg text-xs text-brand-950 font-medium leading-relaxed">
             &ldquo;{currentSuggestion}&rdquo;
           </div>
+
+          {intentRationale && (
+            <div className="mt-2 text-[11px] text-brand-800 bg-brand-50/30 p-2 rounded border border-brand-100">
+              <span className="font-semibold">Intent Preservation Rationale: </span>
+              {intentRationale}
+            </div>
+          )}
 
           {/* Action buttons */}
           <div className="mt-3 flex items-center justify-end space-x-2">

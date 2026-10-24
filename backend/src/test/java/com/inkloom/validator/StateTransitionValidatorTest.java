@@ -20,13 +20,20 @@ class StateTransitionValidatorTest {
 
     @ParameterizedTest
     @CsvSource({
+            "DRAFT, SUBMITTED",
             "DRAFT, IN_REVIEW",
+            "SUBMITTED, IN_REVIEW",
+            "SUBMITTED, CHANGES_REQUESTED",
+            "SUBMITTED, REJECTED",
             "IN_REVIEW, APPROVED",
             "IN_REVIEW, CHANGES_REQUESTED",
             "IN_REVIEW, REJECTED",
+            "CHANGES_REQUESTED, SUBMITTED",
             "CHANGES_REQUESTED, IN_REVIEW",
             "CHANGES_REQUESTED, REJECTED",
+            "APPROVED, SUBMITTED",
             "APPROVED, IN_REVIEW",
+            "REJECTED, SUBMITTED",
             "REJECTED, IN_REVIEW",
             "IN_REVIEW, IN_REVIEW"
     })

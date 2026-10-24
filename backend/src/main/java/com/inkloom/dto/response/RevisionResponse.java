@@ -9,6 +9,7 @@ public class RevisionResponse {
     private String id;
     private String reviewId;
     private int revisionNumber;
+    private Integer sourceRevisionNumber;
     private String content;
     private String authorUserId;
     private String changeSummary;
@@ -22,6 +23,7 @@ public class RevisionResponse {
         this.id = revision.getId();
         this.reviewId = revision.getReviewId();
         this.revisionNumber = revision.getRevisionNumber();
+        this.sourceRevisionNumber = revision.getSourceRevisionNumber();
         this.content = revision.getContent();
         this.authorUserId = revision.getAuthorUserId();
         this.changeSummary = revision.getChangeSummary();
@@ -36,6 +38,8 @@ public class RevisionResponse {
     public void setReviewId(String reviewId) { this.reviewId = reviewId; }
     public int getRevisionNumber() { return revisionNumber; }
     public void setRevisionNumber(int revisionNumber) { this.revisionNumber = revisionNumber; }
+    public Integer getSourceRevisionNumber() { return sourceRevisionNumber; }
+    public void setSourceRevisionNumber(Integer sourceRevisionNumber) { this.sourceRevisionNumber = sourceRevisionNumber; }
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
     public String getAuthorUserId() { return authorUserId; }
