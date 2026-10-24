@@ -6,8 +6,10 @@ import com.inkloom.dto.request.RevisionCreateRequest;
 import com.inkloom.dto.response.ReviewResponse;
 import com.inkloom.dto.response.RevisionResponse;
 import com.inkloom.exception.ResourceNotFoundException;
+import com.inkloom.integration.ai.orchestration.ReviewAiOrchestrator;
 import com.inkloom.model.*;
 import com.inkloom.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -27,6 +29,28 @@ public class ReviewService {
     private final ApprovedSourceRepository sourceRepository;
     private final ReviewFeedbackRepository feedbackRepository;
     private final AuditEventRepository auditEventRepository;
+    private final ReviewAiOrchestrator reviewAiOrchestrator;
+
+    @Autowired
+    public ReviewService(ReviewRepository reviewRepository,
+                         RevisionRepository revisionRepository,
+                         BrandWorkspaceRepository workspaceRepository,
+                         BrandGuidelineRepository guidelineRepository,
+                         ApprovedClaimRepository claimRepository,
+                         ApprovedSourceRepository sourceRepository,
+                         ReviewFeedbackRepository feedbackRepository,
+                         AuditEventRepository auditEventRepository,
+                         ReviewAiOrchestrator reviewAiOrchestrator) {
+        this.reviewRepository = reviewRepository;
+        this.revisionRepository = revisionRepository;
+        this.workspaceRepository = workspaceRepository;
+        this.guidelineRepository = guidelineRepository;
+        this.claimRepository = claimRepository;
+        this.sourceRepository = sourceRepository;
+        this.feedbackRepository = feedbackRepository;
+        this.auditEventRepository = auditEventRepository;
+        this.reviewAiOrchestrator = reviewAiOrchestrator;
+    }
 
     public ReviewService(ReviewRepository reviewRepository,
                          RevisionRepository revisionRepository,
@@ -36,14 +60,8 @@ public class ReviewService {
                          ApprovedSourceRepository sourceRepository,
                          ReviewFeedbackRepository feedbackRepository,
                          AuditEventRepository auditEventRepository) {
-        this.reviewRepository = reviewRepository;
-        this.revisionRepository = revisionRepository;
-        this.workspaceRepository = workspaceRepository;
-        this.guidelineRepository = guidelineRepository;
-        this.claimRepository = claimRepository;
-        this.sourceRepository = sourceRepository;
-        this.feedbackRepository = feedbackRepository;
-        this.auditEventRepository = auditEventRepository;
+        this(reviewRepository, revisionRepository, workspaceRepository, guidelineRepository,
+                claimRepository, sourceRepository, feedbackRepository, auditEventRepository, null);
     }
 
     public ReviewResponse submitReview(ReviewSubmissionRequest request, String authorUserId) {
@@ -120,6 +138,26 @@ public class ReviewService {
                                     correction
                             ));
                         }
+                    }
+                }
+            }
+        }
+
+        // 2. AI-Assisted Brand Governance Evaluation (if enabled)
+        if (reviewAiOrchestrator != null && reviewAiOrchestrator.isAiEnabled()) {
+            String brandName = workspaceRepository.findById(request.getBrandId())
+                    .map(BrandWorkspace::getName)
+                    .orElse(request.getBrandId());
+            List<Finding> aiFindings = reviewAiOrchestrator.performAiReview(
+                    request.getBrandId(), brandName, content, "pending"
+            );
+            if (aiFindings != null) {
+                for (Finding af : aiFindings) {
+                    boolean alreadyFlagged = findings.stream()
+                            .anyMatch(df -> df.getExcerpt() != null && !df.getExcerpt().isEmpty()
+                                    && df.getExcerpt().equalsIgnoreCase(af.getExcerpt()));
+                    if (!alreadyFlagged) {
+                        findings.add(af);
                     }
                 }
             }
