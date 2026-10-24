@@ -14,7 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(HealthController.class)
-@Import({SecurityConfig.class, CorsConfig.class})
+@Import(com.inkloom.config.TestSecurityConfig.class)
 class HealthControllerTest {
 
     @Autowired

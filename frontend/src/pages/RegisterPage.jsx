@@ -11,7 +11,7 @@ import { ShieldCheck, ArrowRight, UserPlus } from 'lucide-react';
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
-  const { success } = useToast();
+  const { success, error: toastError } = useToast();
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -21,7 +21,7 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -46,12 +46,17 @@ export default function RegisterPage() {
     setErrors({});
     setIsLoading(true);
 
-    setTimeout(() => {
-      register(fullName, email, password, role);
+    try {
+      await register(fullName, email, password, role, workspaceName);
       setIsLoading(false);
       success('Workspace Account Initialized', `Welcome to Inkloom AI, ${fullName}!`);
       navigate(ROUTES.DASHBOARD);
-    }, 400);
+    } catch (err) {
+      setIsLoading(false);
+      const msg = err.message || 'Registration failed. Please check form values.';
+      setErrors({ form: msg });
+      toastError('Registration Failed', msg);
+    }
   };
 
   return (
@@ -71,6 +76,11 @@ export default function RegisterPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-sm border border-ink-200/80 rounded-2xl sm:px-10">
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+            {errors.form && (
+              <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">
+                {errors.form}
+              </div>
+            )}
             <Input
               label="Full Name"
               type="text"

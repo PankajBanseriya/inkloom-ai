@@ -15,8 +15,9 @@ import { MOCK_GUIDELINES } from '../mock/mockData';
 import { BookOpen, Plus, ShieldAlert, Sparkles, AlertCircle } from 'lucide-react';
 
 export default function BrandGuidelinesPage() {
-  const { activeBrand } = useAuth();
+  const { activeBrand, user } = useAuth();
   const { success } = useToast();
+  const canEditGuidelines = user?.role === 'BRAND_MANAGER' || user?.role === 'ADMIN';
 
   const [activeTab, setActiveTab] = useState('prohibited');
   const [search, setSearch] = useState('');
@@ -101,12 +102,22 @@ export default function BrandGuidelinesPage() {
         description="Active vocabulary standards, prohibited terminology, required legal disclaimers, and corporate tone constraints."
         badge={MOCK_GUIDELINES.version}
         actions={
-          <Button size="sm" variant="primary" onClick={() => setIsTermModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Add Prohibited Term
-          </Button>
+          canEditGuidelines ? (
+            <Button size="sm" variant="primary" onClick={() => setIsTermModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-1.5" />
+              Add Prohibited Term
+            </Button>
+          ) : null
         }
       />
+
+      {!canEditGuidelines && (
+        <div className="p-3 bg-ink-100/70 rounded-xl border border-ink-200 text-xs text-ink-600 flex items-center justify-between">
+          <span>
+            <strong>Read-only mode:</strong> You are viewing brand guidelines with <strong>{user?.role?.replace('_', ' ')}</strong> permissions. Updating guidelines and prohibited terms requires Brand Manager or Administrator privileges.
+          </span>
+        </div>
+      )}
 
       {/* Guideline metadata banner */}
       <div className="p-4 bg-white rounded-xl border border-ink-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">

@@ -1,14 +1,14 @@
 package com.inkloom.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.inkloom.config.CorsConfig;
-import com.inkloom.config.SecurityConfig;
 import com.inkloom.dto.request.BrandWorkspaceRequest;
 import com.inkloom.dto.response.BrandGuidelineResponse;
 import com.inkloom.dto.response.BrandWorkspaceResponse;
 import com.inkloom.model.BrandGuideline;
 import com.inkloom.model.BrandWorkspace;
+import com.inkloom.security.WorkspaceSecurityService;
 import com.inkloom.service.BrandWorkspaceService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -27,7 +28,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(BrandController.class)
-@Import({SecurityConfig.class, CorsConfig.class})
+@Import(com.inkloom.config.TestSecurityConfig.class)
 class BrandControllerTest {
 
     @Autowired
@@ -39,7 +40,16 @@ class BrandControllerTest {
     @MockBean
     private BrandWorkspaceService workspaceService;
 
+    @Autowired
+    private WorkspaceSecurityService workspaceSecurity;
+
+    @BeforeEach
+    void setUp() {
+        when(workspaceSecurity.hasWorkspaceAccess(any())).thenReturn(true);
+    }
+
     @Test
+    @WithMockUser(username = "admin", roles = {"BRAND_MANAGER", "ADMIN"})
     @DisplayName("POST /api/v1/brands creates new workspace and returns 201 Created")
     void testCreateWorkspace() throws Exception {
         BrandWorkspaceRequest request = new BrandWorkspaceRequest("Acme Cloud", "Technology", "Cloud platform services");
@@ -59,12 +69,13 @@ class BrandControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "admin", roles = {"ADMIN"})
     @DisplayName("GET /api/v1/brands returns workspace list")
     void testGetAllWorkspaces() throws Exception {
         BrandWorkspace workspace = new BrandWorkspace("Acme Cloud", "acme-cloud", "Technology", "Cloud platform services", "user-1");
         workspace.setId("brand-acme");
 
-        when(workspaceService.getAllWorkspaces()).thenReturn(List.of(new BrandWorkspaceResponse(workspace)));
+        when(workspaceService.getWorkspacesForUser(any())).thenReturn(List.of(new BrandWorkspaceResponse(workspace)));
 
         mockMvc.perform(get("/api/v1/brands")
                         .contentType(MediaType.APPLICATION_JSON))
@@ -74,6 +85,7 @@ class BrandControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "admin", roles = {"BRAND_MANAGER", "ADMIN"})
     @DisplayName("GET /api/v1/brands/{brandId}/guidelines returns active guidelines")
     void testGetGuidelines() throws Exception {
         BrandGuideline guideline = new BrandGuideline("brand-acme", "v1.0", "user-1");

@@ -1,12 +1,12 @@
 package com.inkloom.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.inkloom.config.CorsConfig;
-import com.inkloom.config.SecurityConfig;
 import com.inkloom.dto.request.ApprovedClaimRequest;
 import com.inkloom.dto.response.ApprovedClaimResponse;
 import com.inkloom.model.ApprovedClaim;
+import com.inkloom.security.WorkspaceSecurityService;
 import com.inkloom.service.ApprovedClaimService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +14,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -27,7 +28,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ApprovedClaimController.class)
-@Import({SecurityConfig.class, CorsConfig.class})
+@Import(com.inkloom.config.TestSecurityConfig.class)
 class ApprovedClaimControllerTest {
 
     @Autowired
@@ -39,7 +40,17 @@ class ApprovedClaimControllerTest {
     @MockBean
     private ApprovedClaimService claimService;
 
+    @Autowired
+    private WorkspaceSecurityService workspaceSecurity;
+
+    @BeforeEach
+    void setUp() {
+        when(workspaceSecurity.hasWorkspaceAccess(any())).thenReturn(true);
+        when(workspaceSecurity.canAccessClaim(any())).thenReturn(true);
+    }
+
     @Test
+    @WithMockUser(username = "brand-mgr", roles = {"BRAND_MANAGER"})
     @DisplayName("GET /api/v1/brands/{brandId}/claims returns list of claims")
     void testGetClaims() throws Exception {
         ApprovedClaim claim = new ApprovedClaim("brand-1", "99.99% SLA verified", "SOC2 Report", "Global", "Infra Lead", Instant.now().plusSeconds(864000));
@@ -55,6 +66,7 @@ class ApprovedClaimControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "brand-mgr", roles = {"BRAND_MANAGER"})
     @DisplayName("POST /api/v1/brands/{brandId}/claims creates new claim")
     void testCreateClaim() throws Exception {
         ApprovedClaimRequest request = new ApprovedClaimRequest("99.99% SLA verified", "SOC2 Report", "Global", "Infra Lead", Instant.now().plusSeconds(864000));

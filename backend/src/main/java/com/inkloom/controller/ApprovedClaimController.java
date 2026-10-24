@@ -7,6 +7,7 @@ import com.inkloom.service.ApprovedClaimService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,11 +23,13 @@ public class ApprovedClaimController {
     }
 
     @GetMapping
+    @PreAuthorize("@workspaceSecurity.hasWorkspaceAccess(#brandId)")
     public ResponseEntity<ApiResponse<List<ApprovedClaimResponse>>> getClaims(@PathVariable String brandId) {
         return ResponseEntity.ok(ApiResponse.ok(claimService.getClaimsByBrand(brandId)));
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('BRAND_MANAGER', 'ADMIN') and @workspaceSecurity.hasWorkspaceAccess(#brandId)")
     public ResponseEntity<ApiResponse<ApprovedClaimResponse>> createClaim(
             @PathVariable String brandId,
             @Valid @RequestBody ApprovedClaimRequest request) {
@@ -36,6 +39,7 @@ public class ApprovedClaimController {
     }
 
     @GetMapping("/{claimId}")
+    @PreAuthorize("@workspaceSecurity.canAccessClaim(#claimId)")
     public ResponseEntity<ApiResponse<ApprovedClaimResponse>> getClaimById(
             @PathVariable String brandId,
             @PathVariable String claimId) {
@@ -43,6 +47,7 @@ public class ApprovedClaimController {
     }
 
     @PutMapping("/{claimId}")
+    @PreAuthorize("hasAnyRole('BRAND_MANAGER', 'ADMIN') and @workspaceSecurity.canAccessClaim(#claimId)")
     public ResponseEntity<ApiResponse<ApprovedClaimResponse>> updateClaim(
             @PathVariable String brandId,
             @PathVariable String claimId,

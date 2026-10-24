@@ -6,10 +6,12 @@ import com.inkloom.dto.response.ApiResponse;
 import com.inkloom.dto.response.AuthResponse;
 import com.inkloom.dto.response.UserResponse;
 import com.inkloom.exception.UnauthorizedAccessException;
+import com.inkloom.security.UserPrincipal;
 import com.inkloom.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -37,10 +39,14 @@ public class AuthController {
 
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(
+            @AuthenticationPrincipal UserPrincipal principal,
             @RequestHeader(value = "Authorization", required = false) String authHeader,
             @RequestHeader(value = "X-User-Id", required = false) String userIdHeader) {
 
-        if (authHeader != null && !authHeader.isBlank()) {
+        if (principal != null) {
+            UserResponse user = authService.getUserById(principal.getId());
+            return ResponseEntity.ok(ApiResponse.ok(user));
+        } else if (authHeader != null && !authHeader.isBlank()) {
             UserResponse user = authService.getUserByToken(authHeader);
             return ResponseEntity.ok(ApiResponse.ok(user));
         } else if (userIdHeader != null && !userIdHeader.isBlank()) {

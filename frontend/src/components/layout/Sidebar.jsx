@@ -16,8 +16,12 @@ import {
   X,
 } from 'lucide-react';
 import { ROUTES } from '../../constants/routes';
+import { useAuth } from '../../context/AuthContext';
 
 export default function Sidebar({ isOpen = false, onClose }) {
+  const { user } = useAuth();
+  const isAdminOrManager = user?.role === 'ADMIN' || user?.role === 'BRAND_MANAGER';
+
   const sections = [
     {
       title: 'Overview',
@@ -53,7 +57,12 @@ export default function Sidebar({ isOpen = false, onClose }) {
     {
       title: 'System',
       items: [
-        { label: 'Team Management', icon: Users2, path: ROUTES.TEAM },
+        {
+          label: 'Team Management',
+          icon: Users2,
+          path: ROUTES.TEAM,
+          badge: !isAdminOrManager ? 'View' : 'Admin',
+        },
         { label: 'Settings', icon: Settings, path: ROUTES.SETTINGS },
       ],
     },
@@ -114,15 +123,22 @@ export default function Sidebar({ isOpen = false, onClose }) {
                     to={item.path}
                     onClick={() => onClose && onClose()}
                     className={({ isActive }) =>
-                      `flex items-center space-x-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      `flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
                         isActive
                           ? 'bg-brand-600/90 text-white font-semibold shadow-xs'
                           : 'text-ink-300 hover:text-white hover:bg-ink-800/60'
                       }`
                     }
                   >
-                    <Icon className="w-4 h-4 flex-shrink-0" />
-                    <span>{item.label}</span>
+                    <div className="flex items-center space-x-3">
+                      <Icon className="w-4 h-4 flex-shrink-0" />
+                      <span>{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-ink-800 text-ink-300 border border-ink-700 font-mono">
+                        {item.badge}
+                      </span>
+                    )}
                   </NavLink>
                 );
               })}

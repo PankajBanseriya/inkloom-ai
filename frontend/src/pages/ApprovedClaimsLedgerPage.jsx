@@ -13,8 +13,9 @@ import { MOCK_APPROVED_CLAIMS } from '../mock/mockData';
 import { Plus, CheckCircle2, AlertTriangle } from 'lucide-react';
 
 export default function ApprovedClaimsLedgerPage() {
-  const { activeBrand } = useAuth();
+  const { activeBrand, user } = useAuth();
   const { success } = useToast();
+  const canManageClaims = user?.role === 'BRAND_MANAGER' || user?.role === 'ADMIN';
 
   const [claims, setClaims] = useState(MOCK_APPROVED_CLAIMS);
   const [search, setSearch] = useState('');
@@ -117,12 +118,22 @@ export default function ApprovedClaimsLedgerPage() {
         title={`${activeBrand?.name || 'Acme'} Approved Claims Ledger`}
         description="Centralized organization ledger of approved marketing and product claims. Content referencing unapproved or expired claims is automatically flagged."
         actions={
-          <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Register Approved Claim
-          </Button>
+          canManageClaims ? (
+            <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-1.5" />
+              Register Approved Claim
+            </Button>
+          ) : null
         }
       />
+
+      {!canManageClaims && (
+        <div className="p-3 bg-ink-100/70 rounded-xl border border-ink-200 text-xs text-ink-600 flex items-center justify-between">
+          <span>
+            <strong>Read-only mode:</strong> You are viewing approved claims with <strong>{user?.role?.replace('_', ' ')}</strong> permissions. Registering or updating claims in the ledger requires Brand Manager or Administrator privileges.
+          </span>
+        </div>
+      )}
 
       {/* Advisory Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

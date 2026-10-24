@@ -42,7 +42,7 @@ public class AuthService {
         User user = new User(request.getEmail().toLowerCase(), encodedPassword, request.getFullName(), request.getRole());
         User saved = userRepository.save(user);
 
-        String token = tokenProvider.generateToken(saved.getId(), saved.getEmail(), saved.getRole().name());
+        String token = tokenProvider.generateToken(saved.getId(), saved.getEmail(), saved.getRole().name(), saved.getWorkspaceIds());
 
         auditEventRepository.save(new AuditEvent(
                 null,
@@ -64,7 +64,7 @@ public class AuthService {
             throw new UnauthorizedAccessException("Invalid email or password");
         }
 
-        String token = tokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name());
+        String token = tokenProvider.generateToken(user.getId(), user.getEmail(), user.getRole().name(), user.getWorkspaceIds());
 
         auditEventRepository.save(new AuditEvent(
                 null,

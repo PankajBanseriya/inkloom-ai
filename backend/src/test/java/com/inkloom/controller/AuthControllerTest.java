@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AuthController.class)
-@Import({SecurityConfig.class, CorsConfig.class})
+@Import(com.inkloom.config.TestSecurityConfig.class)
 class AuthControllerTest {
 
     @Autowired
@@ -76,6 +76,7 @@ class AuthControllerTest {
     }
 
     @Test
+    @org.springframework.security.test.context.support.WithMockUser(username = "u-2", roles = {"REVIEWER"})
     @DisplayName("GET /api/v1/auth/me returns current user info")
     void testMeEndpointWithHeader() throws Exception {
         User user = new User("user@inkloom.ai", "hashed", "Jane Doe", Role.REVIEWER);

@@ -13,8 +13,9 @@ import { MOCK_APPROVED_SOURCES } from '../mock/mockData';
 import { Plus, ExternalLink, ShieldCheck } from 'lucide-react';
 
 export default function ApprovedSourcesPage() {
-  const { activeBrand } = useAuth();
+  const { activeBrand, user } = useAuth();
   const { success } = useToast();
+  const canManageSources = user?.role === 'BRAND_MANAGER' || user?.role === 'ADMIN';
 
   const [sources, setSources] = useState(MOCK_APPROVED_SOURCES);
   const [search, setSearch] = useState('');
@@ -116,12 +117,22 @@ export default function ApprovedSourcesPage() {
         title={`${activeBrand?.name || 'Acme'} Approved Sources & Evidence`}
         description="Ground-truth documentation repository used to substantiate factual claims and verify evidence citations."
         actions={
-          <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
-            <Plus className="w-4 h-4 mr-1.5" />
-            Register Approved Source
-          </Button>
+          canManageSources ? (
+            <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
+              <Plus className="w-4 h-4 mr-1.5" />
+              Register Approved Source
+            </Button>
+          ) : null
         }
       />
+
+      {!canManageSources && (
+        <div className="p-3 bg-ink-100/70 rounded-xl border border-ink-200 text-xs text-ink-600 flex items-center justify-between">
+          <span>
+            <strong>Read-only mode:</strong> You are viewing approved sources with <strong>{user?.role?.replace('_', ' ')}</strong> permissions. Registering or updating ground-truth sources requires Brand Manager or Administrator privileges.
+          </span>
+        </div>
+      )}
 
       <div className="p-4 bg-white rounded-xl border border-ink-200/80 flex items-center justify-between text-xs">
         <div className="flex items-center space-x-2">

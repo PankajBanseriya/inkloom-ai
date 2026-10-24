@@ -1,15 +1,15 @@
 package com.inkloom.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.inkloom.config.CorsConfig;
-import com.inkloom.config.SecurityConfig;
 import com.inkloom.dto.request.ReviewCommentRequest;
 import com.inkloom.dto.request.ReviewDecisionRequest;
 import com.inkloom.dto.response.ReviewCommentResponse;
 import com.inkloom.dto.response.ReviewDecisionResponse;
 import com.inkloom.model.ReviewComment;
 import com.inkloom.model.ReviewDecision;
+import com.inkloom.security.WorkspaceSecurityService;
 import com.inkloom.service.ApprovalService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,19 +17,17 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
-
-import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ApprovalController.class)
-@Import({SecurityConfig.class, CorsConfig.class})
+@Import(com.inkloom.config.TestSecurityConfig.class)
 class ApprovalControllerTest {
 
     @Autowired
@@ -41,7 +39,16 @@ class ApprovalControllerTest {
     @MockBean
     private ApprovalService approvalService;
 
+    @Autowired
+    private WorkspaceSecurityService workspaceSecurity;
+
+    @BeforeEach
+    void setUp() {
+        when(workspaceSecurity.canAccessReview(any())).thenReturn(true);
+    }
+
     @Test
+    @WithMockUser(username = "reviewer-1", roles = {"REVIEWER"})
     @DisplayName("POST /api/v1/reviews/{reviewId}/comments adds a comment")
     void testAddComment() throws Exception {
         ReviewCommentRequest request = new ReviewCommentRequest("Clarify benchmark source");
@@ -60,6 +67,7 @@ class ApprovalControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "reviewer-1", roles = {"REVIEWER"})
     @DisplayName("POST /api/v1/reviews/{reviewId}/decisions records review decision")
     void testMakeDecision() throws Exception {
         ReviewDecisionRequest request = new ReviewDecisionRequest("APPROVE", "Signed off by Legal");

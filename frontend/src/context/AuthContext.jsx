@@ -1,10 +1,11 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { MOCK_BRANDS, MOCK_TEAM_MEMBERS } from '../mock/mockData';
+import { authService } from '../services/authService';
+import { apiClient } from '../services/apiClient';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  // Initial default authenticated user for Phase 2 frontend experience
   const [user, setUser] = useState(() => {
     const saved = localStorage.getItem('inkloom_user');
     if (saved) {
@@ -15,7 +16,7 @@ export function AuthProvider({ children }) {
       name: 'Sarah Jenkins',
       email: 'sarah.jenkins@acme.internal',
       role: 'REVIEWER',
-      token: 'mock-jwt-token-dev-sarah',
+      token: localStorage.getItem('inkloom_token') || 'demo-jwt-token-reviewer',
     };
   });
 
@@ -27,9 +28,32 @@ export function AuthProvider({ children }) {
     return MOCK_BRANDS[0];
   });
 
+  const logout = useCallback(() => {
+    authService.logout();
+    setUser(null);
+    localStorage.removeItem('inkloom_token');
+    localStorage.removeItem('inkloom_user');
+  }, []);
+
+  // Listen to 401 unauthorized session expiry events from apiClient
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      logout();
+    };
+
+    window.addEventListener('inkloom_unauthorized', handleUnauthorized);
+    return () => {
+      window.removeEventListener('inkloom_unauthorized', handleUnauthorized);
+    };
+  }, [logout]);
+
+  // Synchronize user to localStorage
   useEffect(() => {
     if (user) {
       localStorage.setItem('inkloom_user', JSON.stringify(user));
+      if (user.token) {
+        apiClient.setToken(user.token);
+      }
     } else {
       localStorage.removeItem('inkloom_user');
     }
@@ -41,36 +65,64 @@ export function AuthProvider({ children }) {
     }
   }, [activeBrand]);
 
-  const login = (email, password, role = 'REVIEWER') => {
-    // In Phase 2 frontend, provides realistic interactive authentication
-    const matched = MOCK_TEAM_MEMBERS.find((m) => m.email.toLowerCase() === email.toLowerCase());
-    const newUser = {
-      id: matched ? matched.id : 'user-custom',
-      name: matched ? matched.name : email.split('@')[0],
-      email,
-      role: matched ? matched.role : role,
-      token: 'mock-jwt-token-' + Date.now(),
-    };
-    setUser(newUser);
-    return newUser;
+  const login = async (email, password, roleFallback = 'REVIEWER') => {
+    try {
+      const data = await authService.login(email, password);
+      const authenticatedUser = {
+        id: data.user.id,
+        name: data.user.fullName,
+        email: data.user.email,
+        role: data.user.role,
+        workspaceIds: data.user.workspaceIds,
+        token: data.token,
+      };
+      setUser(authenticatedUser);
+      return authenticatedUser;
+    } catch (err) {
+      // In offline / local mock demo mode, fallback smoothly if backend unreachable
+      if (err.message && err.message.includes('Failed to fetch')) {
+        const matched = MOCK_TEAM_MEMBERS.find((m) => m.email.toLowerCase() === email.toLowerCase());
+        const fallbackUser = {
+          id: matched ? matched.id : 'user-custom',
+          name: matched ? matched.name : email.split('@')[0],
+          email,
+          role: matched ? matched.role : roleFallback,
+          token: 'demo-jwt-token-' + Date.now(),
+        };
+        setUser(fallbackUser);
+        return fallbackUser;
+      }
+      throw err;
+    }
   };
 
-  const register = (fullName, email, _password, role = 'CONTENT_CREATOR') => {
-    const newUser = {
-      id: 'user-' + Date.now().toString(36),
-      name: fullName,
-      email,
-      role,
-      token: 'mock-jwt-token-new-' + Date.now(),
-    };
-    setUser(newUser);
-    return newUser;
-  };
-
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('inkloom_token');
-    localStorage.removeItem('inkloom_user');
+  const register = async (fullName, email, password, role = 'CONTENT_CREATOR', workspaceName = '') => {
+    try {
+      const data = await authService.register({ fullName, email, password, role, workspaceName });
+      const authenticatedUser = {
+        id: data.user.id,
+        name: data.user.fullName,
+        email: data.user.email,
+        role: data.user.role,
+        workspaceIds: data.user.workspaceIds,
+        token: data.token,
+      };
+      setUser(authenticatedUser);
+      return authenticatedUser;
+    } catch (err) {
+      if (err.message && err.message.includes('Failed to fetch')) {
+        const fallbackUser = {
+          id: 'user-' + Date.now().toString(36),
+          name: fullName,
+          email,
+          role,
+          token: 'demo-jwt-token-new-' + Date.now(),
+        };
+        setUser(fallbackUser);
+        return fallbackUser;
+      }
+      throw err;
+    }
   };
 
   const switchBrand = (brandId) => {

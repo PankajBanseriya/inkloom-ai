@@ -43,6 +43,12 @@ class ApiClient {
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        this.setToken(null);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('inkloom_unauthorized', { detail: { endpoint } }));
+        }
+      }
       const error = new Error(
         (data && data.message) || `HTTP error ${response.status}: ${response.statusText}`
       );

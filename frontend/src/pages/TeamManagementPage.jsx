@@ -13,8 +13,9 @@ import { MOCK_TEAM_MEMBERS } from '../mock/mockData';
 import { UserPlus } from 'lucide-react';
 
 export default function TeamManagementPage() {
-  const { activeBrand } = useAuth();
+  const { activeBrand, user } = useAuth();
   const { success } = useToast();
+  const canManageTeam = user?.role === 'ADMIN' || user?.role === 'BRAND_MANAGER';
 
   const [members, setMembers] = useState(MOCK_TEAM_MEMBERS);
   const [search, setSearch] = useState('');
@@ -124,12 +125,22 @@ export default function TeamManagementPage() {
         title="Team & Role-Based Access Control"
         description="Manage workspace team members, assign brand governance roles, and audit workspace authorizations."
         actions={
-          <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
-            <UserPlus className="w-4 h-4 mr-1.5" />
-            Invite Member
-          </Button>
+          canManageTeam ? (
+            <Button size="sm" variant="primary" onClick={() => setIsModalOpen(true)}>
+              <UserPlus className="w-4 h-4 mr-1.5" />
+              Invite Member
+            </Button>
+          ) : null
         }
       />
+
+      {!canManageTeam && (
+        <div className="p-3 bg-ink-100/70 rounded-xl border border-ink-200 text-xs text-ink-600 flex items-center justify-between">
+          <span>
+            <strong>Read-only access:</strong> You are currently signed in as <strong>{user?.role?.replace('_', ' ')}</strong>. Provisioning team accounts and reassigning governance privileges requires Brand Manager or Administrator access.
+          </span>
+        </div>
+      )}
 
       {/* Role explanation */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">

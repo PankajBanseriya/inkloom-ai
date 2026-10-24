@@ -20,6 +20,7 @@ import {
 export default function ApprovalQueuePage() {
   const { user } = useAuth();
   const { success, warning } = useToast();
+  const canDecide = user?.role === 'REVIEWER' || user?.role === 'BRAND_MANAGER' || user?.role === 'ADMIN';
 
   const [queue, setQueue] = useState(MOCK_APPROVAL_QUEUE);
   const [search, setSearch] = useState('');
@@ -44,6 +45,10 @@ export default function ApprovalQueuePage() {
   });
 
   const openDecisionModal = (item, type) => {
+    if (!canDecide) {
+      warning('Access Restricted', 'Content creators cannot record sign-off decisions.');
+      return;
+    }
     setSelectedItem(item);
     setDecisionType(type);
     setDecisionNotes('');
@@ -178,7 +183,7 @@ export default function ApprovalQueuePage() {
             </Button>
           </Link>
 
-          {row.status !== 'APPROVED' && (
+          {canDecide && row.status !== 'APPROVED' && (
             <>
               <Button
                 size="sm"
@@ -200,6 +205,12 @@ export default function ApprovalQueuePage() {
               </Button>
             </>
           )}
+
+          {!canDecide && row.status !== 'APPROVED' && (
+            <span className="text-[11px] text-ink-400 font-medium px-2 py-1 italic bg-ink-50 rounded">
+              Awaiting Sign-off
+            </span>
+          )}
         </div>
       ),
     },
@@ -215,13 +226,18 @@ export default function ApprovalQueuePage() {
       />
 
       {/* Security notice */}
-      <div className="p-4 bg-white rounded-xl border border-ink-200 flex items-center justify-between text-xs">
+      <div className="p-4 bg-white rounded-xl border border-ink-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs">
         <div className="flex items-center space-x-2">
-          <ShieldCheck className="w-4 h-4 text-brand-600" />
+          <ShieldCheck className="w-4 h-4 text-brand-600 flex-shrink-0" />
           <span className="text-ink-600">
             Mandatory Human Review Policy: Content is never automatically approved or published solely by AI evaluations.
           </span>
         </div>
+        {!canDecide && (
+          <span className="px-2 py-0.5 rounded bg-ink-100 text-ink-600 font-medium text-[11px] self-start sm:self-auto">
+            Content Creator View (Read-Only Decisions)
+          </span>
+        )}
       </div>
 
       <FilterBar

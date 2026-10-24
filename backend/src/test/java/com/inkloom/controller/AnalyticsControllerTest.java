@@ -1,9 +1,9 @@
 package com.inkloom.controller;
 
-import com.inkloom.config.CorsConfig;
-import com.inkloom.config.SecurityConfig;
 import com.inkloom.dto.response.WorkspaceAnalyticsResponse;
+import com.inkloom.security.WorkspaceSecurityService;
 import com.inkloom.service.AnalyticsService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,16 +11,18 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(AnalyticsController.class)
-@Import({SecurityConfig.class, CorsConfig.class})
+@Import(com.inkloom.config.TestSecurityConfig.class)
 class AnalyticsControllerTest {
 
     @Autowired
@@ -29,7 +31,16 @@ class AnalyticsControllerTest {
     @MockBean
     private AnalyticsService analyticsService;
 
+    @Autowired
+    private WorkspaceSecurityService workspaceSecurity;
+
+    @BeforeEach
+    void setUp() {
+        when(workspaceSecurity.hasWorkspaceAccess(any())).thenReturn(true);
+    }
+
     @Test
+    @WithMockUser(username = "brand-user", roles = {"BRAND_MANAGER"})
     @DisplayName("GET /api/v1/analytics/brands/{brandId} returns metrics")
     void testGetWorkspaceAnalytics() throws Exception {
         WorkspaceAnalyticsResponse response = new WorkspaceAnalyticsResponse(

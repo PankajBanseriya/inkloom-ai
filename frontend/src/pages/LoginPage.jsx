@@ -10,14 +10,14 @@ import { ShieldCheck, ArrowRight, Lock } from 'lucide-react';
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const { success } = useToast();
+  const { success, error: toastError } = useToast();
 
   const [email, setEmail] = useState('sarah.jenkins@acme.internal');
   const [password, setPassword] = useState('password123');
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -39,20 +39,32 @@ export default function LoginPage() {
     setErrors({});
     setIsLoading(true);
 
-    setTimeout(() => {
-      login(email, password, 'REVIEWER');
+    try {
+      const authUser = await login(email, password, 'REVIEWER');
       setIsLoading(false);
-      success('Authentication Successful', `Signed in as ${email}`);
+      success('Authentication Successful', `Signed in as ${authUser.email}`);
       navigate(ROUTES.DASHBOARD);
-    }, 400);
+    } catch (err) {
+      setIsLoading(false);
+      const msg = err.message || 'Authentication failed. Please verify credentials.';
+      setErrors({ form: msg });
+      toastError('Authentication Failed', msg);
+    }
   };
 
-  const handleQuickLogin = (roleEmail, roleTitle) => {
+  const handleQuickLogin = async (roleEmail, roleTitle) => {
     setEmail(roleEmail);
     setPassword('demo-pass');
-    login(roleEmail, 'demo-pass', roleTitle);
-    success('Demo Session Started', `Signed in as ${roleTitle}`);
-    navigate(ROUTES.DASHBOARD);
+    setIsLoading(true);
+    try {
+      await login(roleEmail, 'demo-pass', roleTitle);
+      setIsLoading(false);
+      success('Demo Session Started', `Signed in as ${roleTitle}`);
+      navigate(ROUTES.DASHBOARD);
+    } catch (err) {
+      setIsLoading(false);
+      toastError('Authentication Error', err.message);
+    }
   };
 
   return (
@@ -72,6 +84,11 @@ export default function LoginPage() {
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-6 shadow-sm border border-ink-200/80 rounded-2xl sm:px-10">
           <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+            {errors.form && (
+              <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200">
+                {errors.form}
+              </div>
+            )}
             <Input
               label="Corporate Email"
               type="email"

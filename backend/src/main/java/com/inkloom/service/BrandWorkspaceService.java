@@ -5,16 +5,18 @@ import com.inkloom.dto.request.BrandWorkspaceRequest;
 import com.inkloom.dto.response.ApprovedSourceResponse;
 import com.inkloom.dto.response.BrandGuidelineResponse;
 import com.inkloom.dto.response.BrandWorkspaceResponse;
-import com.inkloom.exception.DuplicateResourceException;
 import com.inkloom.exception.ResourceNotFoundException;
 import com.inkloom.model.ApprovedSource;
 import com.inkloom.model.AuditEvent;
 import com.inkloom.model.BrandGuideline;
 import com.inkloom.model.BrandWorkspace;
+import com.inkloom.model.Role;
 import com.inkloom.repository.ApprovedSourceRepository;
 import com.inkloom.repository.AuditEventRepository;
 import com.inkloom.repository.BrandGuidelineRepository;
 import com.inkloom.repository.BrandWorkspaceRepository;
+import com.inkloom.repository.UserRepository;
+import com.inkloom.security.UserPrincipal;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -28,15 +30,27 @@ public class BrandWorkspaceService {
     private final BrandGuidelineRepository guidelineRepository;
     private final ApprovedSourceRepository sourceRepository;
     private final AuditEventRepository auditEventRepository;
+    private final UserRepository userRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public BrandWorkspaceService(BrandWorkspaceRepository workspaceRepository,
                                  BrandGuidelineRepository guidelineRepository,
                                  ApprovedSourceRepository sourceRepository,
-                                 AuditEventRepository auditEventRepository) {
+                                 AuditEventRepository auditEventRepository,
+                                 UserRepository userRepository) {
         this.workspaceRepository = workspaceRepository;
         this.guidelineRepository = guidelineRepository;
         this.sourceRepository = sourceRepository;
         this.auditEventRepository = auditEventRepository;
+        this.userRepository = userRepository;
+    }
+
+    // Convenience constructor for tests
+    public BrandWorkspaceService(BrandWorkspaceRepository workspaceRepository,
+                                 BrandGuidelineRepository guidelineRepository,
+                                 ApprovedSourceRepository sourceRepository,
+                                 AuditEventRepository auditEventRepository) {
+        this(workspaceRepository, guidelineRepository, sourceRepository, auditEventRepository, null);
     }
 
     public BrandWorkspaceResponse createWorkspace(BrandWorkspaceRequest request, String ownerUserId) {
@@ -53,6 +67,15 @@ public class BrandWorkspaceService {
                 ownerUserId != null ? ownerUserId : "system"
         );
         BrandWorkspace saved = workspaceRepository.save(workspace);
+
+        if (ownerUserId != null && userRepository != null) {
+            userRepository.findById(ownerUserId).ifPresent(u -> {
+                if (!u.getWorkspaceIds().contains(saved.getId())) {
+                    u.getWorkspaceIds().add(saved.getId());
+                    userRepository.save(u);
+                }
+            });
+        }
 
         // Initialize default guideline for the workspace
         BrandGuideline defaultGuideline = new BrandGuideline(saved.getId(), "v1.0", ownerUserId);
@@ -78,6 +101,18 @@ public class BrandWorkspaceService {
 
     public List<BrandWorkspaceResponse> getAllWorkspaces() {
         return workspaceRepository.findAll().stream()
+                .map(BrandWorkspaceResponse::new)
+                .collect(Collectors.toList());
+    }
+
+    public List<BrandWorkspaceResponse> getWorkspacesForUser(UserPrincipal user) {
+        if (user == null || user.getRole() == Role.ADMIN) {
+            return getAllWorkspaces();
+        }
+        return workspaceRepository.findAll().stream()
+                .filter(w -> (user.getWorkspaceIds() != null && user.getWorkspaceIds().contains(w.getId()))
+                        || user.getId().equals(w.getOwnerUserId())
+                        || (w.getMemberUserIds() != null && w.getMemberUserIds().contains(user.getId())))
                 .map(BrandWorkspaceResponse::new)
                 .collect(Collectors.toList());
     }
@@ -142,7 +177,6 @@ public class BrandWorkspaceService {
     }
 
     public ApprovedSourceResponse createSource(String brandId, ApprovedSourceRequest request) {
-        // Verify workspace exists
         if (!workspaceRepository.existsById(brandId)) {
             throw new ResourceNotFoundException("BrandWorkspace", "id", brandId);
         }
