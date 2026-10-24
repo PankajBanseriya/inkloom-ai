@@ -1,4 +1,9 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const API_BASE_URL = (() => {
+  if (!rawBaseUrl || rawBaseUrl === '/api/v1') return '/api/v1';
+  const trimmed = rawBaseUrl.replace(/\/+$/, '');
+  return trimmed.endsWith('/api/v1') ? trimmed : `${trimmed}/api/v1`;
+})();
 
 class ApiClient {
   constructor(baseUrl) {

@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/brands/{brandId}/claims")
+@RequestMapping({"/api/v1/brands/{brandId}/claims", "/brands/{brandId}/claims"})
 public class ApprovedClaimController {
 
     private final ApprovedClaimService claimService;

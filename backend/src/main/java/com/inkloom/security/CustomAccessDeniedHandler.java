@@ -25,6 +25,7 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
     public void handle(HttpServletRequest request,
                        HttpServletResponse response,
                        AccessDeniedException accessDeniedException) throws IOException {
+        setCorsHeaders(request, response);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
 
@@ -38,5 +39,16 @@ public class CustomAccessDeniedHandler implements AccessDeniedHandler {
         );
 
         objectMapper.writeValue(response.getOutputStream(), apiResponse);
+    }
+
+    private void setCorsHeaders(HttpServletRequest request, HttpServletResponse response) {
+        String origin = request.getHeader("Origin");
+        if (origin != null && !origin.isBlank() && !response.containsHeader("Access-Control-Allow-Origin")) {
+            response.setHeader("Access-Control-Allow-Origin", origin);
+            response.setHeader("Access-Control-Allow-Credentials", "true");
+            response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD");
+            response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, X-Requested-With, Origin, X-User-Id, *");
+            response.setHeader("Vary", "Origin");
+        }
     }
 }
