@@ -28,6 +28,11 @@ public class Review {
     private Double complianceScore = 100.0;
     private int activeRevisionNumber = 1;
     private List<Finding> findings = new ArrayList<>();
+    private String riskLevel = "LOW"; // LOW, MEDIUM, HIGH, CRITICAL
+    private Double riskScore = 0.0;
+    private List<String> riskReasons = new ArrayList<>();
+    private List<String> blockingConditions = new ArrayList<>();
+    private boolean approvalBlocked = false;
     private Instant createdAt = Instant.now();
     private Instant updatedAt = Instant.now();
 
@@ -66,6 +71,16 @@ public class Review {
     public void setActiveRevisionNumber(int activeRevisionNumber) { this.activeRevisionNumber = activeRevisionNumber; }
     public List<Finding> getFindings() { return findings; }
     public void setFindings(List<Finding> findings) { this.findings = findings; }
+    public String getRiskLevel() { return riskLevel; }
+    public void setRiskLevel(String riskLevel) { this.riskLevel = riskLevel; }
+    public Double getRiskScore() { return riskScore; }
+    public void setRiskScore(Double riskScore) { this.riskScore = riskScore; }
+    public List<String> getRiskReasons() { return riskReasons; }
+    public void setRiskReasons(List<String> riskReasons) { this.riskReasons = riskReasons != null ? riskReasons : new ArrayList<>(); }
+    public List<String> getBlockingConditions() { return blockingConditions; }
+    public void setBlockingConditions(List<String> blockingConditions) { this.blockingConditions = blockingConditions != null ? blockingConditions : new ArrayList<>(); }
+    public boolean isApprovalBlocked() { return approvalBlocked; }
+    public void setApprovalBlocked(boolean approvalBlocked) { this.approvalBlocked = approvalBlocked; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

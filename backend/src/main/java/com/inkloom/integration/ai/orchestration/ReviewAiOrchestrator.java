@@ -181,6 +181,17 @@ public class ReviewAiOrchestrator {
             // Distinguish uncertain findings if confidence is low (< 0.70)
             if (finding.getConfidence() != null && finding.getConfidence() < 0.70) {
                 finding.setEvidenceType("UNCERTAIN_FINDING");
+                finding.setUncertaintyClassification("LOW_CONFIDENCE");
+                finding.setClaimVerificationStatus("PENDING_REVIEW");
+            } else if ("CLAIM_CONFLICT".equalsIgnoreCase(finding.getCategory()) || finding.getCategory().contains("CONFLICT")) {
+                finding.setUncertaintyClassification("CONTRADICTION");
+                finding.setClaimVerificationStatus("CONTRADICTED");
+            } else if ("UNSUPPORTED_CLAIM".equalsIgnoreCase(finding.getCategory()) || finding.getCategory().contains("UNSUPPORTED")) {
+                finding.setUncertaintyClassification("UNSUPPORTED");
+                finding.setClaimVerificationStatus("UNSUPPORTED");
+            } else {
+                finding.setUncertaintyClassification("CONFIRMED");
+                finding.setClaimVerificationStatus("MATCHED");
             }
 
             // Map Suggested Corrections

@@ -30,6 +30,7 @@ public class ReviewService {
     private final ReviewFeedbackRepository feedbackRepository;
     private final AuditEventRepository auditEventRepository;
     private final ReviewAiOrchestrator reviewAiOrchestrator;
+    private final ComplianceRiskEvaluator riskEvaluator;
 
     @Autowired
     public ReviewService(ReviewRepository reviewRepository,
@@ -40,7 +41,8 @@ public class ReviewService {
                          ApprovedSourceRepository sourceRepository,
                          ReviewFeedbackRepository feedbackRepository,
                          AuditEventRepository auditEventRepository,
-                         ReviewAiOrchestrator reviewAiOrchestrator) {
+                         ReviewAiOrchestrator reviewAiOrchestrator,
+                         ComplianceRiskEvaluator riskEvaluator) {
         this.reviewRepository = reviewRepository;
         this.revisionRepository = revisionRepository;
         this.workspaceRepository = workspaceRepository;
@@ -50,6 +52,21 @@ public class ReviewService {
         this.feedbackRepository = feedbackRepository;
         this.auditEventRepository = auditEventRepository;
         this.reviewAiOrchestrator = reviewAiOrchestrator;
+        this.riskEvaluator = riskEvaluator != null ? riskEvaluator : new ComplianceRiskEvaluator();
+    }
+
+    public ReviewService(ReviewRepository reviewRepository,
+                         RevisionRepository revisionRepository,
+                         BrandWorkspaceRepository workspaceRepository,
+                         BrandGuidelineRepository guidelineRepository,
+                         ApprovedClaimRepository claimRepository,
+                         ApprovedSourceRepository sourceRepository,
+                         ReviewFeedbackRepository feedbackRepository,
+                         AuditEventRepository auditEventRepository,
+                         ReviewAiOrchestrator reviewAiOrchestrator) {
+        this(reviewRepository, revisionRepository, workspaceRepository, guidelineRepository,
+                claimRepository, sourceRepository, feedbackRepository, auditEventRepository, reviewAiOrchestrator,
+                new ComplianceRiskEvaluator());
     }
 
     public ReviewService(ReviewRepository reviewRepository,
@@ -61,7 +78,8 @@ public class ReviewService {
                          ReviewFeedbackRepository feedbackRepository,
                          AuditEventRepository auditEventRepository) {
         this(reviewRepository, revisionRepository, workspaceRepository, guidelineRepository,
-                claimRepository, sourceRepository, feedbackRepository, auditEventRepository, null);
+                claimRepository, sourceRepository, feedbackRepository, auditEventRepository, null,
+                new ComplianceRiskEvaluator());
     }
 
     public ReviewResponse submitReview(ReviewSubmissionRequest request, String authorUserId) {
@@ -70,110 +88,14 @@ public class ReviewService {
         }
 
         String content = request.getContent();
-        List<Finding> findings = new ArrayList<>();
 
-        // 1. Fetch active guidelines & claims for deterministic evaluation
+        // 1. Fetch active guidelines, claims, and sources for deterministic evaluation
         BrandGuideline guideline = guidelineRepository.findFirstByBrandIdAndStatus(request.getBrandId(), "ACTIVE")
                 .orElse(null);
         List<ApprovedClaim> claims = claimRepository.findByBrandId(request.getBrandId());
+        List<ApprovedSource> sources = sourceRepository != null ? sourceRepository.findByBrandId(request.getBrandId()) : Collections.emptyList();
 
-        // Check prohibited expressions
-        if (guideline != null && guideline.getProhibitedExpressions() != null) {
-            for (BrandGuideline.ProhibitedTerm term : guideline.getProhibitedExpressions()) {
-                if (term.getTerm() != null && !term.getTerm().isEmpty()) {
-                    Pattern pattern = Pattern.compile("\\b" + Pattern.quote(term.getTerm()) + "\\b", Pattern.CASE_INSENSITIVE);
-                    Matcher matcher = pattern.matcher(content);
-                    if (matcher.find()) {
-                        String matchExcerpt = matcher.group();
-                        String alt = term.getSuggestedAlternative() != null ? term.getSuggestedAlternative() : "compliant phrasing";
-
-                        SuggestedCorrection correction = new SuggestedCorrection(
-                                alt,
-                                "compliant " + alt + " architecture",
-                                "robust, enterprise-grade " + alt + " designed for high-availability systems",
-                                term.getReason()
-                        );
-
-                        findings.add(new Finding(
-                                "find-" + UUID.randomUUID().toString().substring(0, 8),
-                                "PROHIBITED_TERMINOLOGY",
-                                term.getSeverity() != null ? term.getSeverity() : "CRITICAL",
-                                "VERIFIED_RULE",
-                                "Prohibited Expression: \"" + term.getTerm() + "\"",
-                                matchExcerpt,
-                                term.getReason() != null ? term.getReason() : "Use of prohibited term detected.",
-                                "Brand Guideline " + guideline.getVersion() + " (Rule ID: " + term.getId() + ")",
-                                correction
-                        ));
-                    }
-                }
-            }
-        }
-
-        // Check required expressions and mandatory legal disclaimers
-        if (guideline != null && guideline.getRequiredPhrases() != null && content.length() > 50) {
-            for (BrandGuideline.RequiredPhrase reqPhrase : guideline.getRequiredPhrases()) {
-                if (reqPhrase.isMandatory() && reqPhrase.getPhrase() != null && !reqPhrase.getPhrase().trim().isEmpty()) {
-                    String phraseText = reqPhrase.getPhrase().trim();
-                    if (!content.toLowerCase().contains(phraseText.toLowerCase())) {
-                        SuggestedCorrection correction = new SuggestedCorrection(
-                                "\n\n" + phraseText,
-                                "\n\n" + phraseText,
-                                "\n\nLegal Notice: " + phraseText,
-                                "Mandatory disclosure required by brand compliance policy: " + reqPhrase.getContext()
-                        );
-
-                        Finding reqFinding = new Finding(
-                                "find-" + UUID.randomUUID().toString().substring(0, 8),
-                                "REQUIRED_TERMINOLOGY",
-                                "WARNING",
-                                "VERIFIED_RULE",
-                                "Missing Mandatory Disclosure: \"" + phraseText + "\"",
-                                "[End of Content]",
-                                "Brand guidelines require including the following mandatory disclosure: \"" + phraseText + "\"",
-                                "Brand Guideline " + guideline.getVersion() + " (Rule ID: " + reqPhrase.getId() + ")",
-                                correction
-                        );
-                        reqFinding.setStartOffset(content.length());
-                        reqFinding.setEndOffset(content.length());
-                        findings.add(reqFinding);
-                    }
-                }
-            }
-        }
-
-        // Check for expired claims
-        if (claims != null) {
-            for (ApprovedClaim claim : claims) {
-                if ("EXPIRED".equalsIgnoreCase(claim.getStatus()) && claim.getClaimText() != null) {
-                    // Check if key phrases of expired claim appear
-                    String[] words = claim.getClaimText().split("\\s+");
-                    if (words.length >= 3) {
-                        String subPhrase = words[0] + " " + words[1] + " " + words[2];
-                        if (content.toLowerCase().contains(subPhrase.toLowerCase())) {
-                            SuggestedCorrection correction = new SuggestedCorrection(
-                                    "independently benchmarked performance metrics",
-                                    "certified enterprise performance metrics meeting North American standards",
-                                    "rigorously tested infrastructure with verified industry benchmarks",
-                                    "Claim has expired and requires updated re-certification evidence."
-                            );
-
-                            findings.add(new Finding(
-                                    "find-" + UUID.randomUUID().toString().substring(0, 8),
-                                    "UNSUPPORTED_CLAIM",
-                                    "CRITICAL",
-                                    "UNSUPPORTED_CLAIM",
-                                    "Expired Factual Claim: " + subPhrase,
-                                    subPhrase,
-                                    "This factual claim corresponds to an expired benchmark record. Independent verification indicates missing current evidence.",
-                                    "Approved Claims Ledger — Expired Record (ID: " + claim.getId() + ")",
-                                    correction
-                            ));
-                        }
-                    }
-                }
-            }
-        }
+        List<Finding> findings = runDeterministicChecks(content, guideline, claims, sources);
 
         // 2. AI-Assisted Brand Governance Evaluation (if enabled)
         if (reviewAiOrchestrator != null && reviewAiOrchestrator.isAiEnabled()) {
@@ -212,6 +134,14 @@ public class ReviewService {
         review.setComplianceScore(Math.round(score * 10.0) / 10.0);
         review.setStatus("IN_REVIEW");
 
+        // Deterministic Risk-Based Compliance Gatekeeper
+        ComplianceRiskEvaluator.EvaluationResult evalResult = riskEvaluator.evaluate(review);
+        review.setRiskLevel(evalResult.getRiskLevel());
+        review.setRiskScore(evalResult.getRiskScore());
+        review.setRiskReasons(evalResult.getRiskReasons());
+        review.setBlockingConditions(evalResult.getBlockingConditions());
+        review.setApprovalBlocked(evalResult.isApprovalBlocked());
+
         Review savedReview = reviewRepository.save(review);
 
         // Save Initial Revision #1 (Preserving original content)
@@ -224,16 +154,249 @@ public class ReviewService {
         );
         revisionRepository.save(initialRevision);
 
+        Map<String, Object> meta = new HashMap<>();
+        meta.put("riskLevel", review.getRiskLevel());
+        meta.put("approvalBlocked", review.isApprovalBlocked());
+        meta.put("findingsCount", findings.size());
+
         auditEventRepository.save(new AuditEvent(
                 request.getBrandId(),
                 authorUserId,
+                "Author",
+                "CONTENT_CREATOR",
                 "REVIEW_SUBMITTED",
                 "Review",
                 savedReview.getId(),
-                "Submitted review: " + savedReview.getTitle() + " (" + findings.size() + " findings)"
+                "Submitted review: " + savedReview.getTitle() + " (" + findings.size() + " findings, Risk: " + review.getRiskLevel() + ")",
+                meta
         ));
 
         return new ReviewResponse(savedReview);
+    }
+
+    /**
+     * Deterministic compliance evaluation for prohibited terminology, mandatory legal disclosures,
+     * expired benchmark evidence, numeric claim discrepancies, and scope contradictions.
+     */
+    public List<Finding> runDeterministicChecks(String content, BrandGuideline guideline,
+                                                List<ApprovedClaim> claims, List<ApprovedSource> sources) {
+        List<Finding> findings = new ArrayList<>();
+        if (content == null || content.isEmpty()) return findings;
+
+        // 1. Prohibited expressions
+        if (guideline != null && guideline.getProhibitedExpressions() != null) {
+            for (BrandGuideline.ProhibitedTerm term : guideline.getProhibitedExpressions()) {
+                if (term.getTerm() != null && !term.getTerm().isEmpty()) {
+                    Pattern pattern = Pattern.compile("\\b" + Pattern.quote(term.getTerm()) + "\\b", Pattern.CASE_INSENSITIVE);
+                    Matcher matcher = pattern.matcher(content);
+                    if (matcher.find()) {
+                        String matchExcerpt = matcher.group();
+                        String alt = term.getSuggestedAlternative() != null ? term.getSuggestedAlternative() : "compliant phrasing";
+
+                        SuggestedCorrection correction = new SuggestedCorrection(
+                                alt,
+                                "compliant " + alt + " architecture",
+                                "robust, enterprise-grade " + alt + " designed for high-availability systems",
+                                term.getReason()
+                        );
+
+                        Finding finding = new Finding(
+                                "find-" + UUID.randomUUID().toString().substring(0, 8),
+                                "PROHIBITED_TERMINOLOGY",
+                                term.getSeverity() != null ? term.getSeverity() : "CRITICAL",
+                                "VERIFIED_RULE",
+                                "Prohibited Expression: \"" + term.getTerm() + "\"",
+                                matchExcerpt,
+                                term.getReason() != null ? term.getReason() : "Use of prohibited term detected.",
+                                "Brand Guideline " + guideline.getVersion() + " (Rule ID: " + term.getId() + ")",
+                                correction
+                        );
+                        finding.setUncertaintyClassification("CONFIRMED");
+                        finding.setClaimVerificationStatus("CONTRADICTED");
+                        findings.add(finding);
+                    }
+                }
+            }
+        }
+
+        // 2. Required expressions and mandatory legal disclaimers
+        if (guideline != null && guideline.getRequiredPhrases() != null && content.length() > 50) {
+            for (BrandGuideline.RequiredPhrase reqPhrase : guideline.getRequiredPhrases()) {
+                if (reqPhrase.isMandatory() && reqPhrase.getPhrase() != null && !reqPhrase.getPhrase().trim().isEmpty()) {
+                    String phraseText = reqPhrase.getPhrase().trim();
+                    if (!content.toLowerCase().contains(phraseText.toLowerCase())) {
+                        SuggestedCorrection correction = new SuggestedCorrection(
+                                "\n\n" + phraseText,
+                                "\n\n" + phraseText,
+                                "\n\nLegal Notice: " + phraseText,
+                                "Mandatory disclosure required by brand compliance policy: " + reqPhrase.getContext()
+                        );
+
+                        Finding reqFinding = new Finding(
+                                "find-" + UUID.randomUUID().toString().substring(0, 8),
+                                "REQUIRED_TERMINOLOGY",
+                                "HIGH",
+                                "VERIFIED_RULE",
+                                "Missing Mandatory Disclosure: \"" + phraseText + "\"",
+                                "[End of Content]",
+                                "Brand guidelines require including the following mandatory disclosure: \"" + phraseText + "\"",
+                                "Brand Guideline " + guideline.getVersion() + " (Rule ID: " + reqPhrase.getId() + ")",
+                                correction
+                        );
+                        reqFinding.setStartOffset(content.length());
+                        reqFinding.setEndOffset(content.length());
+                        reqFinding.setUncertaintyClassification("CONFIRMED");
+                        reqFinding.setClaimVerificationStatus("UNSUPPORTED");
+                        findings.add(reqFinding);
+                    }
+                }
+            }
+        }
+
+        // 3. Claims evaluation: expired evidence, contradictions, and numeric inconsistencies
+        if (claims != null) {
+            for (ApprovedClaim claim : claims) {
+                if (claim.getClaimText() == null) continue;
+
+                // Check expired claims
+                if ("EXPIRED".equalsIgnoreCase(claim.getStatus())) {
+                    String[] words = claim.getClaimText().split("\\s+");
+                    String matchPhrase = null;
+                    if (words.length >= 2) {
+                        String sub2 = words[0] + " " + words[1];
+                        if (content.toLowerCase().contains(sub2.toLowerCase())) {
+                            matchPhrase = sub2;
+                        } else if (words.length >= 3) {
+                            String sub3 = words[0] + " " + words[1] + " " + words[2];
+                            if (content.toLowerCase().contains(sub3.toLowerCase())) {
+                                matchPhrase = sub3;
+                            }
+                        }
+                    }
+
+                    if (matchPhrase != null) {
+                        SuggestedCorrection correction = new SuggestedCorrection(
+                                "independently benchmarked performance metrics",
+                                "certified enterprise performance metrics meeting North American standards",
+                                "rigorously tested infrastructure with verified industry benchmarks",
+                                "Claim has expired and requires updated re-certification evidence."
+                        );
+
+                        Finding expFinding = new Finding(
+                                "find-" + UUID.randomUUID().toString().substring(0, 8),
+                                "UNSUPPORTED_CLAIM",
+                                "CRITICAL",
+                                "EXPIRED_EVIDENCE",
+                                "Expired Factual Claim: " + matchPhrase,
+                                matchPhrase,
+                                "This factual claim corresponds to an expired benchmark record (ID: " + claim.getId() + "). Current evidence has not been re-certified.",
+                                "Approved Claims Ledger — Expired Record (ID: " + claim.getId() + ")",
+                                correction
+                        );
+                        expFinding.setReferencedClaimId(claim.getId());
+                        expFinding.setSupportingSourceId(claim.getSupportingSourceId());
+                        expFinding.setUncertaintyClassification("EXPIRED_EVIDENCE");
+                        expFinding.setClaimVerificationStatus("EXPIRED");
+                        findings.add(expFinding);
+                    }
+                }
+                // Check active approved claims for contradictions and numeric discrepancies
+                else if ("APPROVED".equalsIgnoreCase(claim.getStatus())) {
+                    // Check numeric discrepancy (e.g. claim certifies 99.995%, content states 99.9% or 100%)
+                    Pattern percentPattern = Pattern.compile("(\\b\\d+(?:\\.\\d+)?%)");
+                    Matcher claimMatcher = percentPattern.matcher(claim.getClaimText());
+                    if (claimMatcher.find()) {
+                        String approvedNumber = claimMatcher.group(1);
+                        Pattern contentPercentPattern = Pattern.compile("(\\b\\d+(?:\\.\\d+)?%)\\s*(?:uptime|availability|SLA|guarantee|reliability)", Pattern.CASE_INSENSITIVE);
+                        Matcher contentMatcher = contentPercentPattern.matcher(content);
+                        if (contentMatcher.find()) {
+                            String contentNumber = contentMatcher.group(1);
+                            if (!contentNumber.equalsIgnoreCase(approvedNumber)) {
+                                String excerpt = contentMatcher.group(0);
+                                SuggestedCorrection correction = new SuggestedCorrection(
+                                        approvedNumber + " uptime SLA",
+                                        "industry-standard " + approvedNumber + " uptime SLA",
+                                        "contractually guaranteed " + approvedNumber + " high-availability SLA",
+                                        "Align metric with Approved Claim #" + claim.getId()
+                                );
+
+                                Finding numFinding = new Finding(
+                                        "find-" + UUID.randomUUID().toString().substring(0, 8),
+                                        "CLAIM_CONFLICT",
+                                        "CRITICAL",
+                                        "VERIFIED_RULE",
+                                        "Numeric Inconsistency: \"" + contentNumber + "\" vs Certified \"" + approvedNumber + "\"",
+                                        excerpt,
+                                        "The numeric figure (" + contentNumber + ") directly contradicts the certified figure in Approved Claim #" + claim.getId() + " (" + approvedNumber + ").",
+                                        "Approved Claim #" + claim.getId() + " (" + claim.getClaimText() + ")",
+                                        correction
+                                );
+                                numFinding.setReferencedClaimId(claim.getId());
+                                numFinding.setSupportingSourceId(claim.getSupportingSourceId());
+                                numFinding.setUncertaintyClassification("NUMERIC_DISCREPANCY");
+                                numFinding.setClaimVerificationStatus("CONTRADICTED");
+                                numFinding.setContradictionDetails("Content states " + contentNumber + " but approved claim certifies " + approvedNumber);
+                                findings.add(numFinding);
+                            }
+                        }
+                    }
+
+                    // Check scope contradiction (e.g. claim restricted to Enterprise tier only)
+                    if (claim.getScope() != null && claim.getScope().toLowerCase().contains("enterprise")) {
+                        Pattern scopeConflictPattern = Pattern.compile("\\b(?:available to all tiers|on all plans|available for free|standard plan included|all users)\\b", Pattern.CASE_INSENSITIVE);
+                        Matcher scopeMatcher = scopeConflictPattern.matcher(content);
+                        if (scopeMatcher.find()) {
+                            String excerpt = scopeMatcher.group();
+                            SuggestedCorrection correction = new SuggestedCorrection(
+                                    "available on Enterprise plans",
+                                    "available exclusively with Enterprise tier licensing",
+                                    "provisioned for Enterprise tier agreements with dedicated support",
+                                    "Scope restricted to Enterprise tier by approved claim."
+                            );
+
+                            Finding scopeFinding = new Finding(
+                                    "find-" + UUID.randomUUID().toString().substring(0, 8),
+                                    "CLAIM_CONFLICT",
+                                    "HIGH",
+                                    "VERIFIED_RULE",
+                                    "Scope Contradiction: Restricted to Enterprise Tier",
+                                    excerpt,
+                                    "The claim \"" + claim.getClaimText() + "\" is restricted to scope '" + claim.getScope() + "'. Stating broader availability violates approved governance policy.",
+                                    "Approved Claim #" + claim.getId() + " (Scope: " + claim.getScope() + ")",
+                                    correction
+                            );
+                            scopeFinding.setReferencedClaimId(claim.getId());
+                            scopeFinding.setSupportingSourceId(claim.getSupportingSourceId());
+                            scopeFinding.setUncertaintyClassification("CONTRADICTION");
+                            scopeFinding.setClaimVerificationStatus("CONTRADICTED");
+                            scopeFinding.setContradictionDetails("Claim scope restriction violated.");
+                            findings.add(scopeFinding);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Source Status Verification (Flags deprecated or pending sources as EXPIRED_EVIDENCE)
+        if (sources != null && !sources.isEmpty()) {
+            Map<String, ApprovedSource> sourceMap = sources.stream()
+                    .filter(s -> s.getId() != null)
+                    .collect(Collectors.toMap(ApprovedSource::getId, s -> s, (a, b) -> a));
+
+            for (Finding f : findings) {
+                if (f.getSupportingSourceId() != null && sourceMap.containsKey(f.getSupportingSourceId())) {
+                    ApprovedSource src = sourceMap.get(f.getSupportingSourceId());
+                    if ("DEPRECATED".equalsIgnoreCase(src.getApprovalStatus()) || "PENDING".equalsIgnoreCase(src.getApprovalStatus())) {
+                        f.setSeverity("CRITICAL");
+                        f.setEvidenceType("EXPIRED_EVIDENCE");
+                        f.setUncertaintyClassification("EXPIRED_EVIDENCE");
+                        f.setExplanation(f.getExplanation() + " Supporting source '" + src.getTitle() + "' has status " + src.getApprovalStatus() + ".");
+                    }
+                }
+            }
+        }
+
+        return findings;
     }
 
     public ReviewResponse getReviewById(String reviewId) {
@@ -267,21 +430,35 @@ public class ReviewService {
 
     private void sanitizeFindingEvidence(Review review) {
         if (review.getFindings() == null || review.getFindings().isEmpty() || sourceRepository == null) return;
-        List<String> authorizedSourceIds = sourceRepository.findByBrandId(review.getBrandId()).stream()
-                .map(ApprovedSource::getId)
-                .collect(Collectors.toList());
+        List<ApprovedSource> authorizedSources = sourceRepository.findByBrandId(review.getBrandId());
+        Map<String, ApprovedSource> sourceMap = authorizedSources.stream()
+                .filter(s -> s.getId() != null)
+                .collect(Collectors.toMap(ApprovedSource::getId, s -> s, (a, b) -> a));
 
         for (Finding f : review.getFindings()) {
-            if (f.getSupportingSourceId() != null && !authorizedSourceIds.contains(f.getSupportingSourceId())) {
-                f.setSupportingSourceId(null);
+            if (f.getSupportingSourceId() != null) {
+                if (!sourceMap.containsKey(f.getSupportingSourceId())) {
+                    f.setSupportingSourceId(null);
+                    f.setEvidenceType("UNSUPPORTED_CLAIM");
+                    f.setUncertaintyClassification("UNSUPPORTED");
+                } else {
+                    ApprovedSource src = sourceMap.get(f.getSupportingSourceId());
+                    if ("DEPRECATED".equalsIgnoreCase(src.getApprovalStatus()) || "PENDING".equalsIgnoreCase(src.getApprovalStatus())) {
+                        f.setSeverity("CRITICAL");
+                        f.setEvidenceType("EXPIRED_EVIDENCE");
+                        f.setUncertaintyClassification("EXPIRED_EVIDENCE");
+                        f.setSupportingDoc("Referenced Source Deprecated/Pending: " + src.getTitle());
+                    }
+                }
             }
             if (f.getReferencedSourceIds() != null && !f.getReferencedSourceIds().isEmpty()) {
                 List<String> validIds = f.getReferencedSourceIds().stream()
-                        .filter(authorizedSourceIds::contains)
+                        .filter(sourceMap::containsKey)
                         .collect(Collectors.toList());
                 f.setReferencedSourceIds(validIds);
                 if (validIds.isEmpty() && "VERIFIED_RULE".equalsIgnoreCase(f.getEvidenceType()) && f.getCategory() != null && f.getCategory().contains("CLAIM")) {
                     f.setEvidenceType("UNSUPPORTED_CLAIM");
+                    f.setUncertaintyClassification("UNSUPPORTED");
                     f.setSupportingDoc("Evidence Not Found in Registered Sources");
                 }
             }
@@ -318,10 +495,18 @@ public class ReviewService {
         review.setActiveRevisionNumber(newRevisionNum);
 
         // Recalculate score
-        long criticalRemaining = review.getFindings().stream().filter(f -> "CRITICAL".equalsIgnoreCase(f.getSeverity())).count();
-        long warningRemaining = review.getFindings().stream().filter(f -> "WARNING".equalsIgnoreCase(f.getSeverity())).count();
+        long criticalRemaining = review.getFindings().stream().filter(f -> !f.isResolved() && "CRITICAL".equalsIgnoreCase(f.getSeverity())).count();
+        long warningRemaining = review.getFindings().stream().filter(f -> !f.isResolved() && "WARNING".equalsIgnoreCase(f.getSeverity())).count();
         double newScore = Math.max(0.0, 100.0 - (criticalRemaining * 12.0) - (warningRemaining * 5.0));
         review.setComplianceScore(Math.round(newScore * 10.0) / 10.0);
+
+        // Re-evaluate risk and compliance gates after correction
+        ComplianceRiskEvaluator.EvaluationResult evalResult = riskEvaluator.evaluate(review);
+        review.setRiskLevel(evalResult.getRiskLevel());
+        review.setRiskScore(evalResult.getRiskScore());
+        review.setRiskReasons(evalResult.getRiskReasons());
+        review.setBlockingConditions(evalResult.getBlockingConditions());
+        review.setApprovalBlocked(evalResult.isApprovalBlocked());
         review.setUpdatedAt(Instant.now());
 
         Review savedReview = reviewRepository.save(review);
@@ -399,6 +584,25 @@ public class ReviewService {
         int sourceRevNum = review.getActiveRevisionNumber();
         int newRevisionNum = sourceRevNum + 1;
         review.setActiveRevisionNumber(newRevisionNum);
+
+        // Re-evaluate content deterministically against guidelines, claims, and sources
+        BrandGuideline guideline = guidelineRepository != null ? guidelineRepository.findFirstByBrandIdAndStatus(review.getBrandId(), "ACTIVE").orElse(null) : null;
+        List<ApprovedClaim> claims = claimRepository != null ? claimRepository.findByBrandId(review.getBrandId()) : Collections.emptyList();
+        List<ApprovedSource> sources = sourceRepository != null ? sourceRepository.findByBrandId(review.getBrandId()) : Collections.emptyList();
+        List<Finding> newFindings = runDeterministicChecks(request.getContent(), guideline, claims, sources);
+        review.setFindings(newFindings);
+
+        long criticalCount = newFindings.stream().filter(f -> "CRITICAL".equalsIgnoreCase(f.getSeverity())).count();
+        long warningCount = newFindings.stream().filter(f -> "WARNING".equalsIgnoreCase(f.getSeverity())).count();
+        double newScore = Math.max(0.0, 100.0 - (criticalCount * 12.0) - (warningCount * 5.0));
+        review.setComplianceScore(Math.round(newScore * 10.0) / 10.0);
+
+        ComplianceRiskEvaluator.EvaluationResult evalResult = riskEvaluator.evaluate(review);
+        review.setRiskLevel(evalResult.getRiskLevel());
+        review.setRiskScore(evalResult.getRiskScore());
+        review.setRiskReasons(evalResult.getRiskReasons());
+        review.setBlockingConditions(evalResult.getBlockingConditions());
+        review.setApprovalBlocked(evalResult.isApprovalBlocked());
         review.setUpdatedAt(Instant.now());
         reviewRepository.save(review);
 
@@ -412,13 +616,21 @@ public class ReviewService {
         );
         Revision savedRevision = revisionRepository.save(revision);
 
+        Map<String, Object> meta = new HashMap<>();
+        meta.put("revisionNumber", newRevisionNum);
+        meta.put("riskLevel", review.getRiskLevel());
+        meta.put("complianceScore", review.getComplianceScore());
+
         auditEventRepository.save(new AuditEvent(
                 review.getBrandId(),
                 userId,
+                "Author",
+                "CONTENT_CREATOR",
                 "REVISION_SAVED",
                 "Revision",
                 savedRevision.getId(),
-                "Saved revision #" + newRevisionNum + ": " + request.getChangeSummary()
+                "Saved revision #" + newRevisionNum + ": " + request.getChangeSummary() + " (Risk: " + review.getRiskLevel() + ")",
+                meta
         ));
 
         return new RevisionResponse(savedRevision);

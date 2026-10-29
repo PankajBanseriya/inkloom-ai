@@ -9,4 +9,5 @@ import java.util.List;
 @Repository
 public interface ReviewDecisionRepository extends MongoRepository<ReviewDecision, String> {
     List<ReviewDecision> findByReviewIdOrderByTimestampDesc(String reviewId);
+    List<ReviewDecision> findByReviewIdIn(List<String> reviewIds);
 }

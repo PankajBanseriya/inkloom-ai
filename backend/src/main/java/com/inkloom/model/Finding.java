@@ -18,6 +18,9 @@ public class Finding {
     private boolean resolved = false;
     private Double confidence = 1.0;
     private String referencedClaimId;
+    private String uncertaintyClassification; // CONFIRMED, LOW_CONFIDENCE, UNSUPPORTED, CONTRADICTION, NUMERIC_DISCREPANCY, EXPIRED_EVIDENCE
+    private String claimVerificationStatus; // MATCHED, CONTRADICTED, UNSUPPORTED, EXPIRED, PENDING_REVIEW
+    private String contradictionDetails;
 
     public Finding() {}
 
@@ -88,4 +91,13 @@ public class Finding {
 
     public String getReferencedClaimId() { return referencedClaimId; }
     public void setReferencedClaimId(String referencedClaimId) { this.referencedClaimId = referencedClaimId; }
+
+    public String getUncertaintyClassification() { return uncertaintyClassification; }
+    public void setUncertaintyClassification(String uncertaintyClassification) { this.uncertaintyClassification = uncertaintyClassification; }
+
+    public String getClaimVerificationStatus() { return claimVerificationStatus; }
+    public void setClaimVerificationStatus(String claimVerificationStatus) { this.claimVerificationStatus = claimVerificationStatus; }
+
+    public String getContradictionDetails() { return contradictionDetails; }
+    public void setContradictionDetails(String contradictionDetails) { this.contradictionDetails = contradictionDetails; }
 }

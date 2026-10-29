@@ -4,46 +4,91 @@ import com.inkloom.dto.response.CategoryHeatmapItemDto;
 import com.inkloom.dto.response.WorkspaceAnalyticsResponse;
 import com.inkloom.model.Finding;
 import com.inkloom.model.Review;
+import com.inkloom.model.ReviewDecision;
 import com.inkloom.model.ReviewFeedback;
 import com.inkloom.repository.BrandWorkspaceRepository;
+import com.inkloom.repository.ReviewDecisionRepository;
 import com.inkloom.repository.ReviewFeedbackRepository;
 import com.inkloom.repository.ReviewRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Collections;
-import java.util.List;
+import java.lang.reflect.Proxy;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 class AnalyticsServiceTest {
 
-    @Mock
+    private Map<String, List<Review>> reviewsByBrand;
+    private Map<String, List<ReviewFeedback>> feedbackByBrand;
+    private Set<String> existingWorkspaceIds;
+    private List<ReviewDecision> decisions;
+
     private ReviewRepository reviewRepository;
-    @Mock
     private BrandWorkspaceRepository workspaceRepository;
-    @Mock
     private ReviewFeedbackRepository feedbackRepository;
+    private ReviewDecisionRepository decisionRepository;
 
     private AnalyticsService analyticsService;
 
+    @SuppressWarnings("unchecked")
+    private <T> T proxy(Class<T> iface, java.lang.reflect.InvocationHandler handler) {
+        return (T) Proxy.newProxyInstance(getClass().getClassLoader(), new Class<?>[]{iface}, handler);
+    }
+
     @BeforeEach
     void setUp() {
-        analyticsService = new AnalyticsService(reviewRepository, workspaceRepository, feedbackRepository);
+        reviewsByBrand = new HashMap<>();
+        feedbackByBrand = new HashMap<>();
+        existingWorkspaceIds = new HashSet<>();
+        decisions = new ArrayList<>();
+
+        workspaceRepository = proxy(BrandWorkspaceRepository.class, (p, m, args) -> {
+            if ("existsById".equals(m.getName())) {
+                return existingWorkspaceIds.contains(args[0]);
+            }
+            return false;
+        });
+
+        reviewRepository = proxy(ReviewRepository.class, (p, m, args) -> {
+            if ("findByBrandIdOrderByCreatedAtDesc".equals(m.getName())) {
+                return reviewsByBrand.getOrDefault(args[0], Collections.emptyList());
+            }
+            return null;
+        });
+
+        feedbackRepository = proxy(ReviewFeedbackRepository.class, (p, m, args) -> {
+            if ("findByBrandId".equals(m.getName())) {
+                return feedbackByBrand.getOrDefault(args[0], Collections.emptyList());
+            }
+            return null;
+        });
+
+        decisionRepository = proxy(ReviewDecisionRepository.class, (p, m, args) -> {
+            if ("findByReviewIdIn".equals(m.getName())) {
+                return decisions;
+            }
+            return null;
+        });
+
+        analyticsService = new AnalyticsService(
+                reviewRepository,
+                workspaceRepository,
+                feedbackRepository,
+                null,
+                null,
+                decisionRepository
+        );
     }
 
     @Test
     @DisplayName("Returns hasSufficientData=false when no reviews exist in workspace")
     void testInsufficientDataWhenEmpty() {
         String brandId = "brand-empty";
-        when(workspaceRepository.existsById(brandId)).thenReturn(true);
-        when(reviewRepository.findByBrandIdOrderByCreatedAtDesc(brandId)).thenReturn(Collections.emptyList());
+        existingWorkspaceIds.add(brandId);
+        reviewsByBrand.put(brandId, Collections.emptyList());
 
         WorkspaceAnalyticsResponse response = analyticsService.getWorkspaceAnalytics(brandId);
 
@@ -61,9 +106,10 @@ class AnalyticsServiceTest {
     @DisplayName("Calculates real heatmap matrix, repeated phrases, and ambiguity signals from reviews and feedback")
     void testAnalyticsWithRealReviewsAndFeedback() {
         String brandId = "brand-active";
-        when(workspaceRepository.existsById(brandId)).thenReturn(true);
+        existingWorkspaceIds.add(brandId);
 
         Review review1 = new Review(brandId, "user-1", "Press Release 1", "PRESS_RELEASE", "Content 1");
+        review1.setId("rev-1");
         Finding finding1 = new Finding();
         finding1.setCategory("PROHIBITED_TERMINOLOGY");
         finding1.setExcerpt("bulletproof cloud");
@@ -75,6 +121,7 @@ class AnalyticsServiceTest {
         review1.setStatus("IN_REVIEW");
 
         Review review2 = new Review(brandId, "user-2", "Press Release 2", "PRESS_RELEASE", "Content 2");
+        review2.setId("rev-2");
         Finding finding3 = new Finding();
         finding3.setCategory("PROHIBITED_TERMINOLOGY");
         finding3.setExcerpt("bulletproof cloud");
@@ -82,11 +129,11 @@ class AnalyticsServiceTest {
         review2.setComplianceScore(95.0);
         review2.setStatus("APPROVED");
 
-        when(reviewRepository.findByBrandIdOrderByCreatedAtDesc(brandId)).thenReturn(List.of(review1, review2));
+        reviewsByBrand.put(brandId, List.of(review1, review2));
 
         ReviewFeedback fb1 = new ReviewFeedback(brandId, "rev-1", "find-1", "PROHIBITED_TERMINOLOGY", "ACCEPTED_LIGHT", "Complied");
         ReviewFeedback fb2 = new ReviewFeedback(brandId, "rev-2", "find-3", "PROHIBITED_TERMINOLOGY", "ACCEPTED_BALANCED", "Complied");
-        when(feedbackRepository.findByBrandId(brandId)).thenReturn(List.of(fb1, fb2));
+        feedbackByBrand.put(brandId, List.of(fb1, fb2));
 
         WorkspaceAnalyticsResponse response = analyticsService.getWorkspaceAnalytics(brandId);
 
@@ -114,5 +161,12 @@ class AnalyticsServiceTest {
                 .orElseThrow();
         assertEquals("SOURCE_GAP", claimRow.getStatus());
         assertTrue(response.getAmbiguityIndex() >= 1);
+
+        // Verify Continuous Brand Intelligence metrics
+        assertEquals(1, response.getResolvedFindingsCount());
+        assertEquals(2, response.getUnresolvedFindingsCount());
+        assertTrue(response.getAvgTurnaroundHours() >= 0.0);
+        assertNotNull(response.getFrequentlyViolatedGuidelines());
+        assertEquals(2, response.getFrequentlyViolatedGuidelines().size());
     }
 }

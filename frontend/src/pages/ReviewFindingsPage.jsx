@@ -165,9 +165,19 @@ export default function ReviewFindingsPage() {
               {score}%
             </div>
             <div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                 <h3 className="text-sm font-bold text-ink-900">Governance Evaluation Summary</h3>
                 <StatusBadge status={review.status || 'IN_REVIEW'} />
+                {review.riskLevel && (
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wide ${
+                    review.riskLevel === 'CRITICAL' ? 'bg-rose-100 text-rose-800 border-rose-300' :
+                    review.riskLevel === 'HIGH' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+                    review.riskLevel === 'MEDIUM' ? 'bg-amber-100 text-amber-800 border-amber-300' :
+                    'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  }`}>
+                    Risk: {review.riskLevel}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-ink-500 mt-0.5">
                 {findings.length} pending findings require resolution before human sign-off.
@@ -197,6 +207,28 @@ export default function ReviewFindingsPage() {
           </div>
         </div>
       </Card>
+
+      {/* Mandatory Compliance Gate Alert */}
+      {review.approvalBlocked && (
+        <div className="p-4 bg-rose-50 border border-rose-300 rounded-xl text-xs space-y-2">
+          <div className="flex items-center space-x-2 text-rose-900 font-bold">
+            <ShieldAlert className="w-4 h-4 text-rose-600 flex-shrink-0" />
+            <span>Approval Blocked: Mandatory Compliance Gates Active</span>
+          </div>
+          <p className="text-rose-800 text-[11px]">
+            Final sign-off is blocked because mandatory brand compliance conditions remain unresolved:
+          </p>
+          <ul className="list-disc list-inside space-y-0.5 text-rose-900 text-[11px] font-medium pl-1">
+            {review.blockingConditions && review.blockingConditions.length > 0 ? (
+              review.blockingConditions.map((cond, idx) => (
+                <li key={idx}>{cond}</li>
+              ))
+            ) : (
+              <li>Unresolved critical severity findings must be corrected prior to sign-off.</li>
+            )}
+          </ul>
+        </div>
+      )}
 
       {/* Filters */}
       <FilterBar

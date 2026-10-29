@@ -47,6 +47,18 @@ export default function EvidenceCard({
         </div>
 
         <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+          {finding.uncertaintyClassification && (
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+              finding.uncertaintyClassification === 'CONTRADICTION' ? 'bg-rose-100 text-rose-800 border-rose-300' :
+              finding.uncertaintyClassification === 'NUMERIC_DISCREPANCY' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+              finding.uncertaintyClassification === 'EXPIRED_EVIDENCE' ? 'bg-amber-100 text-amber-800 border-amber-300' :
+              finding.uncertaintyClassification === 'UNSUPPORTED' ? 'bg-purple-100 text-purple-800 border-purple-300' :
+              finding.uncertaintyClassification === 'LOW_CONFIDENCE' ? 'bg-sky-100 text-sky-800 border-sky-300' :
+              'bg-emerald-100 text-emerald-800 border-emerald-300'
+            }`}>
+              {finding.uncertaintyClassification.replace('_', ' ')}
+            </span>
+          )}
           {confidencePct != null && (
             isUncertain ? (
               <Badge variant="warning" size="sm" className="flex items-center space-x-1">
@@ -74,6 +86,17 @@ export default function EvidenceCard({
           &ldquo;{finding.excerpt}&rdquo;
         </p>
       </div>
+
+      {/* Contradiction Details Alert */}
+      {finding.contradictionDetails && (
+        <div className="mt-2.5 p-2.5 bg-rose-50 border border-rose-300 rounded-lg text-xs text-rose-900 flex items-start space-x-2">
+          <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold uppercase tracking-wider text-[10px] text-rose-700 block">Ground Truth Inconsistency:</span>
+            <p className="mt-0.5">{finding.contradictionDetails}</p>
+          </div>
+        </div>
+      )}
 
       {/* Explanation */}
       <div className="mt-3">

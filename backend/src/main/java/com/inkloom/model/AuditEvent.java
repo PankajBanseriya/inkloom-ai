@@ -16,10 +16,13 @@ public class AuditEvent {
     private String brandId;
 
     private String userId;
+    private String actorName;
+    private String actorRole;
     private String eventType;
     private String resourceType;
     private String resourceId;
     private String description;
+    private java.util.Map<String, Object> metadata = new java.util.HashMap<>();
     private Instant timestamp = Instant.now();
 
     public AuditEvent() {}
@@ -34,12 +37,32 @@ public class AuditEvent {
         this.timestamp = Instant.now();
     }
 
+    public AuditEvent(String brandId, String userId, String actorName, String actorRole, String eventType,
+                      String resourceType, String resourceId, String description, java.util.Map<String, Object> metadata) {
+        this.brandId = brandId;
+        this.userId = userId;
+        this.actorName = actorName;
+        this.actorRole = actorRole;
+        this.eventType = eventType;
+        this.resourceType = resourceType;
+        this.resourceId = resourceId;
+        this.description = description;
+        this.metadata = metadata != null ? metadata : new java.util.HashMap<>();
+        this.timestamp = Instant.now();
+    }
+
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
     public String getBrandId() { return brandId; }
     public void setBrandId(String brandId) { this.brandId = brandId; }
     public String getUserId() { return userId; }
     public void setUserId(String userId) { this.userId = userId; }
+    public String getActorName() { return actorName; }
+    public void setActorName(String actorName) { this.actorName = actorName; }
+    public String getActorRole() { return actorRole; }
+    public void setActorRole(String actorRole) { this.actorRole = actorRole; }
+    public java.util.Map<String, Object> getMetadata() { return metadata; }
+    public void setMetadata(java.util.Map<String, Object> metadata) { this.metadata = metadata != null ? metadata : new java.util.HashMap<>(); }
     public String getEventType() { return eventType; }
     public void setEventType(String eventType) { this.eventType = eventType; }
     public String getResourceType() { return resourceType; }

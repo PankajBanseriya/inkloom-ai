@@ -57,11 +57,13 @@ public class ApprovalController {
             @Valid @RequestBody ReviewDecisionRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestHeader(value = "X-User-Name", required = false) String userName,
+            @RequestHeader(value = "X-User-Role", required = false) String userRole,
             @AuthenticationPrincipal UserPrincipal principal) {
         String effectiveUserId = (principal != null) ? principal.getId() : userId;
         String effectiveName = (principal != null) ? principal.getFullName() : userName;
+        String effectiveRole = (principal != null && principal.getRole() != null) ? principal.getRole().name() : (userRole != null ? userRole : "REVIEWER");
 
-        ReviewDecisionResponse response = approvalService.makeDecision(reviewId, request, effectiveUserId, effectiveName);
+        ReviewDecisionResponse response = approvalService.makeDecision(reviewId, request, effectiveUserId, effectiveName, effectiveRole);
         return ResponseEntity.ok(ApiResponse.ok("Review decision recorded successfully", response));
     }
 

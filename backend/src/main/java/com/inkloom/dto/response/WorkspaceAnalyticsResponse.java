@@ -22,6 +22,11 @@ public class WorkspaceAnalyticsResponse {
     private Map<String, String> metricExplanations = new HashMap<>();
     private List<CategoryTrendDto> categoryTrends = new ArrayList<>();
     private List<RecentActivityDto> recentActivity = new ArrayList<>();
+    private double avgTurnaroundHours;
+    private long highRiskPendingCount;
+    private long resolvedFindingsCount;
+    private long unresolvedFindingsCount;
+    private List<ViolatedGuidelineDto> frequentlyViolatedGuidelines = new ArrayList<>();
 
     public WorkspaceAnalyticsResponse() {}
 
@@ -70,4 +75,14 @@ public class WorkspaceAnalyticsResponse {
     public void setCategoryTrends(List<CategoryTrendDto> categoryTrends) { this.categoryTrends = categoryTrends; }
     public List<RecentActivityDto> getRecentActivity() { return recentActivity; }
     public void setRecentActivity(List<RecentActivityDto> recentActivity) { this.recentActivity = recentActivity; }
+    public double getAvgTurnaroundHours() { return avgTurnaroundHours; }
+    public void setAvgTurnaroundHours(double avgTurnaroundHours) { this.avgTurnaroundHours = avgTurnaroundHours; }
+    public long getHighRiskPendingCount() { return highRiskPendingCount; }
+    public void setHighRiskPendingCount(long highRiskPendingCount) { this.highRiskPendingCount = highRiskPendingCount; }
+    public long getResolvedFindingsCount() { return resolvedFindingsCount; }
+    public void setResolvedFindingsCount(long resolvedFindingsCount) { this.resolvedFindingsCount = resolvedFindingsCount; }
+    public long getUnresolvedFindingsCount() { return unresolvedFindingsCount; }
+    public void setUnresolvedFindingsCount(long unresolvedFindingsCount) { this.unresolvedFindingsCount = unresolvedFindingsCount; }
+    public List<ViolatedGuidelineDto> getFrequentlyViolatedGuidelines() { return frequentlyViolatedGuidelines; }
+    public void setFrequentlyViolatedGuidelines(List<ViolatedGuidelineDto> frequentlyViolatedGuidelines) { this.frequentlyViolatedGuidelines = frequentlyViolatedGuidelines; }
 }

@@ -19,6 +19,11 @@ public class ReviewResponse {
     private int activeRevisionNumber;
     private int findingsCount;
     private List<Finding> findings;
+    private String riskLevel;
+    private Double riskScore;
+    private List<String> riskReasons;
+    private List<String> blockingConditions;
+    private boolean approvalBlocked;
     private Instant createdAt;
     private Instant updatedAt;
 
@@ -37,6 +42,11 @@ public class ReviewResponse {
         this.activeRevisionNumber = review.getActiveRevisionNumber();
         this.findings = review.getFindings();
         this.findingsCount = review.getFindings() != null ? review.getFindings().size() : 0;
+        this.riskLevel = review.getRiskLevel();
+        this.riskScore = review.getRiskScore();
+        this.riskReasons = review.getRiskReasons();
+        this.blockingConditions = review.getBlockingConditions();
+        this.approvalBlocked = review.isApprovalBlocked();
         this.createdAt = review.getCreatedAt();
         this.updatedAt = review.getUpdatedAt();
     }
@@ -65,6 +75,16 @@ public class ReviewResponse {
     public void setFindingsCount(int findingsCount) { this.findingsCount = findingsCount; }
     public List<Finding> getFindings() { return findings; }
     public void setFindings(List<Finding> findings) { this.findings = findings; }
+    public String getRiskLevel() { return riskLevel; }
+    public void setRiskLevel(String riskLevel) { this.riskLevel = riskLevel; }
+    public Double getRiskScore() { return riskScore; }
+    public void setRiskScore(Double riskScore) { this.riskScore = riskScore; }
+    public List<String> getRiskReasons() { return riskReasons; }
+    public void setRiskReasons(List<String> riskReasons) { this.riskReasons = riskReasons; }
+    public List<String> getBlockingConditions() { return blockingConditions; }
+    public void setBlockingConditions(List<String> blockingConditions) { this.blockingConditions = blockingConditions; }
+    public boolean isApprovalBlocked() { return approvalBlocked; }
+    public void setApprovalBlocked(boolean approvalBlocked) { this.approvalBlocked = approvalBlocked; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

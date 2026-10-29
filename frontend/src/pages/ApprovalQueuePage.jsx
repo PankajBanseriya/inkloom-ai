@@ -58,9 +58,13 @@ export default function ApprovalQueuePage() {
               id: r.id,
               title: r.title || 'Untitled Document',
               submittedBy: r.authorUserId || 'Content Team',
+              authorUserId: r.authorUserId,
               submittedAt: r.createdAt ? String(r.createdAt).split('T')[0] : 'Today',
               status: r.status || 'IN_REVIEW',
               complianceScore: r.complianceScore != null ? r.complianceScore : 90.0,
+              riskLevel: r.riskLevel || (criticalCount > 0 ? 'CRITICAL' : warningCount > 0 ? 'MEDIUM' : 'LOW'),
+              approvalBlocked: Boolean(r.approvalBlocked || criticalCount > 0),
+              blockingConditions: r.blockingConditions || [],
               criticalCount,
               warningCount,
               activeRevisionNumber: r.activeRevisionNumber || 1,
@@ -97,6 +101,17 @@ export default function ApprovalQueuePage() {
     if (!canDecide) {
       warning('Access Restricted', 'Content creators cannot record sign-off decisions.');
       return;
+    }
+    if (type === 'APPROVE') {
+      if (item.approvalBlocked) {
+        warning('Approval Blocked', 'This document has unresolved compliance blocking gates. Resolve critical findings before approval.');
+        return;
+      }
+      const isAuthor = Boolean(user && (user.id === item.authorUserId || user.username === item.submittedBy));
+      if (isAuthor && user?.role !== 'ADMIN') {
+        warning('Separation of Duties', 'Authors cannot approve their own submissions. Qualified reviewer sign-off is required.');
+        return;
+      }
     }
     setSelectedItem(item);
     setDecisionType(type);
@@ -219,6 +234,34 @@ export default function ApprovalQueuePage() {
       },
     },
     {
+      key: 'riskLevel',
+      header: 'Compliance Gate & Risk',
+      render: (_, row) => (
+        <div className="space-y-1">
+          <div className="flex items-center space-x-1.5 flex-wrap">
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+              row.riskLevel === 'CRITICAL' ? 'bg-rose-100 text-rose-800 border-rose-300' :
+              row.riskLevel === 'HIGH' ? 'bg-orange-100 text-orange-800 border-orange-300' :
+              row.riskLevel === 'MEDIUM' ? 'bg-amber-100 text-amber-800 border-amber-300' :
+              'bg-emerald-100 text-emerald-800 border-emerald-300'
+            }`}>
+              {row.riskLevel || 'LOW'}
+            </span>
+            {row.approvalBlocked && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">
+                Blocked Gate
+              </span>
+            )}
+          </div>
+          {row.authorUserId && user && user.id === row.authorUserId && (
+            <span className="text-[10px] text-brand-700 font-semibold block">
+              (Your Submission)
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
       key: 'status',
       header: 'Review Status',
       render: (val) => <StatusBadge status={val} />,
@@ -226,54 +269,72 @@ export default function ApprovalQueuePage() {
     {
       key: 'actions',
       header: 'Governance Decisions',
-      render: (_, row) => (
-        <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
-          <Link to={`/reviews/${row.id}/findings`}>
-            <Button size="sm" variant="outline" className="text-[11px] px-2 py-1 h-7">
-              <Eye className="w-3 h-3 mr-1" />
-              Findings
+      render: (_, row) => {
+        const isAuthor = Boolean(user && (user.id === row.authorUserId || user.username === row.submittedBy));
+        const isSelfApprovalBlocked = isAuthor && user?.role !== 'ADMIN';
+        const isBlocked = row.approvalBlocked || isSelfApprovalBlocked;
+        const blockTooltip = row.approvalBlocked
+          ? `Approval blocked: Mandatory compliance conditions active (${row.blockingConditions?.length || row.criticalCount} unresolved issues).`
+          : isSelfApprovalBlocked
+          ? 'Separation of duties: Authors cannot approve their own submissions.'
+          : '';
+
+        return (
+          <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+            <Link to={`/reviews/${row.id}/findings`}>
+              <Button size="sm" variant="outline" className="text-[11px] px-2 py-1 h-7">
+                <Eye className="w-3 h-3 mr-1" />
+                Findings
+              </Button>
+            </Link>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => openCommentsModal(row)}
+              className="text-[11px] px-2 py-1 h-7"
+            >
+              <MessageSquare className="w-3 h-3 mr-1" />
+              Notes
             </Button>
-          </Link>
 
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => openCommentsModal(row)}
-            className="text-[11px] px-2 py-1 h-7"
-          >
-            <MessageSquare className="w-3 h-3 mr-1" />
-            Notes
-          </Button>
+            {canDecide && row.status !== 'APPROVED' && row.status !== 'REJECTED' && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openDecisionModal(row, 'REQUEST_CHANGES')}
+                  className="text-[11px] px-2 py-1 h-7 text-amber-700 hover:bg-amber-50"
+                >
+                  Request Changes
+                </Button>
+                <div title={blockTooltip} className="inline-block">
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    disabled={isBlocked}
+                    onClick={() => openDecisionModal(row, 'APPROVE')}
+                    className={`text-[11px] px-2 py-1 h-7 ${
+                      isBlocked
+                        ? 'bg-ink-200 text-ink-400 cursor-not-allowed opacity-60 hover:bg-ink-200'
+                        : 'bg-emerald-600 hover:bg-emerald-700'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3 h-3 mr-1" />
+                    Approve
+                  </Button>
+                </div>
+              </>
+            )}
 
-          {canDecide && row.status !== 'APPROVED' && row.status !== 'REJECTED' && (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => openDecisionModal(row, 'REQUEST_CHANGES')}
-                className="text-[11px] px-2 py-1 h-7 text-amber-700 hover:bg-amber-50"
-              >
-                Request Changes
-              </Button>
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={() => openDecisionModal(row, 'APPROVE')}
-                className="text-[11px] px-2 py-1 h-7 bg-emerald-600 hover:bg-emerald-700"
-              >
-                <CheckCircle2 className="w-3 h-3 mr-1" />
-                Approve
-              </Button>
-            </>
-          )}
-
-          {!canDecide && row.status !== 'APPROVED' && (
-            <span className="text-[11px] text-ink-400 font-medium px-2 py-1 italic bg-ink-50 rounded">
-              Awaiting Sign-off
-            </span>
-          )}
-        </div>
-      ),
+            {!canDecide && row.status !== 'APPROVED' && (
+              <span className="text-[11px] text-ink-400 font-medium px-2 py-1 italic bg-ink-50 rounded">
+                Awaiting Sign-off
+              </span>
+            )}
+          </div>
+        );
+      },
     },
   ];
 

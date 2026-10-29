@@ -76,6 +76,10 @@ public class ApprovalService {
     }
 
     public ReviewDecisionResponse makeDecision(String reviewId, ReviewDecisionRequest request, String reviewerUserId, String reviewerName) {
+        return makeDecision(reviewId, request, reviewerUserId, reviewerName, "REVIEWER");
+    }
+
+    public ReviewDecisionResponse makeDecision(String reviewId, ReviewDecisionRequest request, String reviewerUserId, String reviewerName, String reviewerRole) {
         Review review = reviewRepository.findById(reviewId)
                 .orElseThrow(() -> new ResourceNotFoundException("Review", "id", reviewId));
 
@@ -99,6 +103,30 @@ public class ApprovalService {
                 break;
         }
 
+        // Feature 2: Compliance Blocking Gates and Separation of Duties Verification
+        if ("APPROVED".equals(targetStatus)) {
+            // 1. Mandatory compliance conditions check
+            if (review.isApprovalBlocked() || (review.getBlockingConditions() != null && !review.getBlockingConditions().isEmpty())) {
+                String conditions = (review.getBlockingConditions() != null && !review.getBlockingConditions().isEmpty())
+                        ? String.join("; ", review.getBlockingConditions())
+                        : "Mandatory compliance conditions remain unresolved.";
+                throw new com.inkloom.exception.InvalidStateTransitionException(
+                        "Cannot approve review: Mandatory compliance blocking conditions exist: " + conditions
+                );
+            }
+
+            // 2. Separation of duties check: Authors cannot self-approve their own submissions unless ADMIN
+            if (reviewerUserId != null && review.getAuthorUserId() != null
+                    && reviewerUserId.trim().equalsIgnoreCase(review.getAuthorUserId().trim())) {
+                boolean isAdmin = "ADMIN".equalsIgnoreCase(reviewerRole);
+                if (!isAdmin) {
+                    throw new com.inkloom.exception.InvalidStateTransitionException(
+                            "Separation of duties violation: Authors cannot approve their own submissions. Qualified reviewer sign-off is required."
+                    );
+                }
+            }
+        }
+
         stateTransitionValidator.validateTransition(review.getStatus(), targetStatus);
 
         review.setStatus(targetStatus);
@@ -115,13 +143,23 @@ public class ApprovalService {
         );
         ReviewDecision savedDecision = decisionRepository.save(decision);
 
+        java.util.Map<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("action", rawAction);
+        metadata.put("revisionNumber", review.getActiveRevisionNumber());
+        metadata.put("previousStatus", review.getStatus());
+        metadata.put("newStatus", targetStatus);
+        metadata.put("notes", request.getDecisionNotes());
+
         auditEventRepository.save(new AuditEvent(
                 review.getBrandId(),
                 reviewerUserId != null ? reviewerUserId : "reviewer-default",
+                reviewerName != null ? reviewerName : "Reviewer",
+                reviewerRole != null ? reviewerRole : "REVIEWER",
                 "DECISION_" + rawAction,
                 "Review",
                 reviewId,
-                "Review transitioned to " + targetStatus + (request.getDecisionNotes() != null ? ": " + request.getDecisionNotes() : "")
+                "Review transitioned to " + targetStatus + (request.getDecisionNotes() != null ? ": " + request.getDecisionNotes() : ""),
+                metadata
         ));
 
         return new ReviewDecisionResponse(savedDecision);

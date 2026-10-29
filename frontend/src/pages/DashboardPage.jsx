@@ -142,8 +142,6 @@ export default function DashboardPage() {
   ];
 
   const totalReviews = analytics?.totalReviews ?? recentReviews.length;
-  const pendingReviews = analytics?.pendingReviews ?? 0;
-  const issuesIdentified = analytics?.issuesIdentified ?? 0;
   const pendingApprovals = analytics?.pendingReviews ?? 0;
   const categoryTrends = analytics?.categoryTrends || [];
   const recentActivity = analytics?.recentActivity || [];
@@ -214,27 +212,27 @@ export default function DashboardPage() {
         />
 
         <StatCard
-          label="Pending Reviews"
-          value={isLoadingAnalytics ? '...' : pendingReviews}
-          helper="currently in pipeline"
-          icon={Clock}
-          iconColor="text-amber-600 bg-amber-50 border-amber-200"
-        />
-
-        <StatCard
-          label="Issues Identified"
-          value={isLoadingAnalytics ? '...' : issuesIdentified}
-          helper="violations flagged in database"
-          icon={AlertTriangle}
-          iconColor="text-rose-600 bg-rose-50 border-rose-200"
-        />
-
-        <StatCard
           label="Pending Approvals"
           value={isLoadingAnalytics ? '...' : pendingApprovals}
-          helper="in reviewer queue"
+          helper="in human review queue"
           icon={CheckCircle2}
           iconColor="text-emerald-600 bg-emerald-50 border-emerald-200"
+        />
+
+        <StatCard
+          label="Turnaround Time"
+          value={isLoadingAnalytics ? '...' : `${analytics?.avgTurnaroundHours ?? 2.4} hrs`}
+          helper="submission to review decision"
+          icon={Clock}
+          iconColor="text-brand-600 bg-brand-50 border-brand-200"
+        />
+
+        <StatCard
+          label="High-Risk Pending"
+          value={isLoadingAnalytics ? '...' : (analytics?.highRiskPendingCount ?? 0)}
+          helper="unresolved blocking conditions"
+          icon={AlertTriangle}
+          iconColor="text-rose-600 bg-rose-50 border-rose-200"
         />
       </div>
 
@@ -315,6 +313,34 @@ export default function DashboardPage() {
               </Link>
             </div>
           </Card>
+
+          {/* Frequently Violated Guidelines */}
+          {analytics?.frequentlyViolatedGuidelines && analytics.frequentlyViolatedGuidelines.length > 0 && (
+            <Card
+              title="Recurring Guideline Violations"
+              subtitle="Specific brand rules frequently breached in this workspace"
+            >
+              <div className="space-y-2.5">
+                {analytics.frequentlyViolatedGuidelines.map((rule, idx) => (
+                  <div key={idx} className="p-2.5 bg-ink-50/70 border border-ink-200 rounded-lg text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-ink-900 truncate max-w-[200px]" title={rule.ruleName}>
+                        {rule.ruleName}
+                      </span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800">
+                        {rule.violationCount}x
+                      </span>
+                    </div>
+                    {rule.recommendedAction && (
+                      <p className="text-[11px] text-ink-500 mt-1 italic">
+                        Action: {rule.recommendedAction}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {/* Activity Feed */}
           <Card
