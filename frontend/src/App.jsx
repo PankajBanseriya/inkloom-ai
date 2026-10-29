@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { ToastProvider } from './context/ToastContext';
 import { AuthProvider } from './context/AuthContext';
 import AppLayout from './components/layout/AppLayout';
@@ -6,6 +6,7 @@ import ProtectedRoute from './features/auth/ProtectedRoute';
 import { ROUTES } from './constants/routes';
 
 // Pages
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
@@ -29,20 +30,20 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
           <Routes>
-            {/* Public Auth Routes */}
+            {/* Public Landing & Auth Routes */}
+            <Route path="/" element={<LandingPage />} />
+            <Route path={ROUTES.LANDING} element={<LandingPage />} />
             <Route path={ROUTES.LOGIN} element={<LoginPage />} />
             <Route path={ROUTES.REGISTER} element={<RegisterPage />} />
 
             {/* Protected Workspace Layout */}
             <Route
-              path="/"
               element={
                 <ProtectedRoute>
                   <AppLayout />
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Navigate to={ROUTES.DASHBOARD} replace />} />
               <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
               <Route path={ROUTES.BRANDS} element={<BrandWorkspacesPage />} />
               <Route path={ROUTES.GUIDELINES} element={<BrandGuidelinesPage />} />
